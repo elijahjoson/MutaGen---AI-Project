@@ -202,11 +202,13 @@ class GameController:
 
                 elif self.state is State.COMBAT and ev.key == pygame.K_ESCAPE:
                     self._combat_snapshot = pygame.display.get_surface().copy()
+                    pygame.mouse.set_visible(True)
                     self.state = State.PAUSED
 
                 elif self.state is State.PAUSED:
                     action = self._pause_menu.handle_event(ev)
                     if action == "resume":
+                        pygame.mouse.set_visible(False)
                         self.state = State.COMBAT
                         self._combat_snapshot = None
                     elif action == "restart":
