@@ -8,12 +8,15 @@ Exposes:
   HUDState       — data container for combat HUD
   draw_hud       — renders HP, upload %, wave number, enemy count
   draw_ledger    — renders the Evolutionary Ledger intermission screen
+  PauseMenu      — pause overlay during combat
+  font_manager   — centralized font loading
 """
 
 from src.ui.loadout_screen import LoadoutScreen
 from src.ui.upgrade_screen import UpgradeScreen
 from src.ui.hud import HUDState, draw_hud
 from src.ui.ledger_panel import draw_ledger
+from src.ui.pause_menu import PauseMenu
 
 __all__ = [
     "LoadoutScreen",
@@ -21,4 +24,5 @@ __all__ = [
     "HUDState",
     "draw_hud",
     "draw_ledger",
+    "PauseMenu",
 ]

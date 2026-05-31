@@ -1,10 +1,11 @@
 """GameController — owns all subsystems and the 5-state machine.
 
-States: TITLE · COMBAT · INTERMISSION · VICTORY · DEFEAT
+States: TITLE · LOADOUT · COMBAT · PAUSED · INTERMISSION · UPGRADE · VICTORY · DEFEAT
 
 """
 from enum import Enum
 import pygame
+import math
 
 # ── Updated imports: was mutagen_arena.settings ──────────────────────────────
 from src.core.constants import (
@@ -33,8 +34,15 @@ from src.systems.intermission import Intermission
 
 from src.entities.player import Player
 from src.core.camera import Camera
-from src.ui.ledger_panel import draw_ledger
+from src.ui.ledger_panel import draw_ledger, reset_intermission_anim
 from src.ui.hud import HUDState, draw_hud
+from src.ui.pause_menu import PauseMenu
+from src.ui import font_manager as fm
+from src.ui.ui_helpers import (
+    draw_panel, draw_scanlines, draw_vignette,
+    draw_pill_bar, lerp_color, brighten, dim, with_alpha,
+    render_glitch_text, ParticleSystem, draw_fade, pulse_color,
+)
 
 # ── Sentience threshold ───────────────────────────────────────────────────────
 # If any enemy reaches this fraction of theoretical max fitness, player loses.
@@ -46,6 +54,7 @@ class State(Enum):
     TITLE        = "title"
     LOADOUT      = "loadout"      # ← NEW: loadout selection before run starts
     COMBAT       = "combat"
+    PAUSED       = "paused"
     INTERMISSION = "intermission"
     UPGRADE      = "upgrade"
     VICTORY      = "victory"
@@ -87,15 +96,28 @@ class GameController:
         self.debug_overlay = False
         self._fonts_ready  = False
 
+        # UI state
+        self._pause_menu = PauseMenu()
+        self._title_particles = ParticleSystem(count=40, bounds=(WIDTH, HEIGHT),
+                                                color=(60, 180, 120))
+        self._end_particles: ParticleSystem | None = None
+        self._title_time = 0.0
+        self._end_time = 0.0
+        self._end_fade_in = 255
+
+        # Combat frame snapshot for pause overlay
+        self._combat_snapshot: pygame.Surface | None = None
+
     # ── Font init (lazy, after pygame.init in main) ────────────────────────────
 
     def _ensure_fonts(self) -> None:
         if self._fonts_ready:
             return
-        self.font_title  = pygame.font.SysFont("consolas", 36, bold=True)
-        self.font_header = pygame.font.SysFont("consolas", 18, bold=True)
-        self.font_body   = pygame.font.SysFont("consolas", 16)
-        self.font_small  = pygame.font.SysFont("consolas", 14)
+        fm.init()
+        self.font_title  = fm.title()
+        self.font_header = fm.header()
+        self.font_body   = fm.body()
+        self.font_small  = fm.small()
         self._fonts_ready = True
 
     # ── State transitions ──────────────────────────────────────────────────────
@@ -147,6 +169,10 @@ class GameController:
             wave_finished=self.wave_n,
             sa_temperature=T,
         )
+
+        # Reset intermission animations
+        reset_intermission_anim()
+
         self.state = State.INTERMISSION
 
     def _start_next_wave(self) -> None:
@@ -158,11 +184,19 @@ class GameController:
 
     def _go_victory(self) -> None:
         self.state = State.VICTORY
+        self._end_time = 0.0
+        self._end_fade_in = 255
+        self._end_particles = ParticleSystem(count=50, bounds=(WIDTH, HEIGHT),
+                                              color=(60, 220, 140))
 
     def _go_defeat(self) -> None:
         if self.arena is not None:
             self.arena.finalize_survivors()
         self.state = State.DEFEAT
+        self._end_time = 0.0
+        self._end_fade_in = 255
+        self._end_particles = ParticleSystem(count=50, bounds=(WIDTH, HEIGHT),
+                                              color=(200, 60, 60))
 
     def _reset_to_title(self) -> None:
         self.state      = State.TITLE
@@ -170,6 +204,7 @@ class GameController:
         self.upload_pct = 0.0
         self.player     = None
         self.arena      = None
+        self._title_time = 0.0
 
     # ── Event handling ─────────────────────────────────────────────────────────
 
@@ -185,11 +220,42 @@ class GameController:
                 if self.state is State.TITLE and ev.key == pygame.K_SPACE:
                     self._go_loadout()
 
+                elif self.state is State.COMBAT and ev.key == pygame.K_ESCAPE:
+                    # Capture combat frame for pause background
+                    self._combat_snapshot = pygame.display.get_surface().copy()
+                    self.state = State.PAUSED
+
+                elif self.state is State.PAUSED:
+                    action = self._pause_menu.handle_event(ev)
+                    if action == "resume":
+                        self.state = State.COMBAT
+                        self._combat_snapshot = None
+                    elif action == "restart":
+                        self._reset_to_title()
+                        self._combat_snapshot = None
+                    elif action == "quit":
+                        self._reset_to_title()
+                        self._combat_snapshot = None
+
                 elif self.state is State.INTERMISSION:
                     self.intermission.handle_event(ev)
 
                 elif self.state in (State.VICTORY, State.DEFEAT) and ev.key == pygame.K_RETURN:
                     self._reset_to_title()
+
+            # Also handle pause menu mouse clicks
+            if self.state is State.PAUSED:
+                if ev.type == pygame.MOUSEBUTTONDOWN:
+                    action = self._pause_menu.handle_event(ev)
+                    if action == "resume":
+                        self.state = State.COMBAT
+                        self._combat_snapshot = None
+                    elif action == "restart":
+                        self._reset_to_title()
+                        self._combat_snapshot = None
+                    elif action == "quit":
+                        self._reset_to_title()
+                        self._combat_snapshot = None
 
     # ── Per-frame update ───────────────────────────────────────────────────────
 
@@ -242,6 +308,9 @@ class GameController:
                         return
                 self._enter_intermission()
 
+        elif self.state is State.PAUSED:
+            self._pause_menu.update(dt)
+
         elif self.state is State.INTERMISSION:
             self.intermission.update(dt)
             if self.intermission.advance_requested:
@@ -267,6 +336,12 @@ class GameController:
         elif self.state is State.COMBAT:
             self._render_combat(screen)
 
+        elif self.state is State.PAUSED:
+            # Draw frozen combat frame underneath
+            if self._combat_snapshot:
+                screen.blit(self._combat_snapshot, (0, 0))
+            self._pause_menu.draw(screen)
+
         elif self.state is State.INTERMISSION:
             draw_ledger(
                 screen,
@@ -282,24 +357,93 @@ class GameController:
             pass
 
         elif self.state is State.VICTORY:
-            self._render_end_screen(screen, "PURGE COMPLETE", (127, 255, 127))
+            self._render_victory(screen)
 
         elif self.state is State.DEFEAT:
-            self._render_end_screen(screen, "CONTAINMENT BREACH", (255, 127, 127))
+            self._render_defeat(screen)
 
     def _render_title(self, screen: pygame.Surface) -> None:
-        screen.fill((10, 14, 26))
-        title    = self.font_title.render("MUTAGEN ARENA", True, (255, 255, 255))
-        subtitle = self.font_body.render(
-            "Project Sentinel — survive while the Purge Code uploads",
-            True, (180, 180, 180)
-        )
-        prompt = self.font_body.render(
-            "Press SPACE to select loadout", True, (200, 200, 200)
-        )
-        screen.blit(title,    title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40)))
-        screen.blit(subtitle, subtitle.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 8)))
-        screen.blit(prompt,   prompt.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 60)))
+        dt = 1 / 60
+        self._title_time += dt
+        self._title_particles.update(dt)
+
+        # Background gradient
+        for y_band in range(0, HEIGHT, 4):
+            frac = y_band / HEIGHT
+            r = int(6 + 6 * frac)
+            g = int(10 + 8 * frac)
+            b = int(20 + 12 * frac)
+            pygame.draw.rect(screen, (r, g, b), (0, y_band, WIDTH, 4))
+
+        # Grid
+        step = 80
+        grid_alpha = int(12 + 6 * math.sin(self._title_time * 0.3))
+        for gx in range(0, WIDTH + step, step):
+            gs = pygame.Surface((1, HEIGHT), pygame.SRCALPHA)
+            gs.fill((40, 80, 60, grid_alpha))
+            screen.blit(gs, (gx, 0))
+        for gy in range(0, HEIGHT + step, step):
+            gs = pygame.Surface((WIDTH, 1), pygame.SRCALPHA)
+            gs.fill((40, 80, 60, grid_alpha))
+            screen.blit(gs, (0, gy))
+
+        # Particles
+        self._title_particles.draw(screen)
+
+        # Scanlines + vignette
+        draw_scanlines(screen, alpha=5)
+        draw_vignette(screen, intensity=70)
+
+        # Title — "MUTAGEN ARENA" with glow
+        pulse = 0.6 + 0.4 * math.sin(self._title_time * 1.5)
+        title_color = pulse_color((100, 240, 180), pulse)
+
+        # Glow behind title
+        glow_surf = pygame.Surface((500, 60), pygame.SRCALPHA)
+        glow_alpha = int(30 * pulse)
+        pygame.draw.ellipse(glow_surf, (*title_color[:3], glow_alpha),
+                            pygame.Rect(0, 0, 500, 60))
+        screen.blit(glow_surf, (WIDTH // 2 - 250, HEIGHT // 2 - 70))
+
+        title_surf = fm.mega().render("MUTAGEN ARENA", True, title_color)
+        screen.blit(title_surf,
+                    title_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 44)))
+
+        # Subtitle — typewriter reveal
+        full_sub = "Project Sentinel — survive while the Purge Code uploads"
+        chars_shown = min(len(full_sub), int(self._title_time * 25))
+        revealed = full_sub[:chars_shown]
+        sub_surf = fm.body().render(revealed, True, (160, 170, 180))
+        screen.blit(sub_surf,
+                    sub_surf.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 10)))
+
+        # Blinking cursor
+        if chars_shown < len(full_sub) and int(self._title_time * 4) % 2 == 0:
+            cursor_x = WIDTH // 2 + sub_surf.get_width() // 2 + 2
+            cursor_surf = fm.body().render("_", True, (160, 170, 180))
+            screen.blit(cursor_surf, (cursor_x, HEIGHT // 2 + 2))
+
+        # Decorative divider
+        div_y = HEIGHT // 2 + 35
+        div_w = 300
+        div_x = WIDTH // 2 - div_w // 2
+        div_surf = pygame.Surface((div_w, 1), pygame.SRCALPHA)
+        div_surf.fill((*title_color, int(40 * pulse)))
+        screen.blit(div_surf, (div_x, div_y))
+
+        # "Press SPACE" prompt — pulsing
+        if self._title_time > 2.5:
+            prompt_pulse = 0.5 + 0.5 * math.sin(self._title_time * 2.5)
+            prompt_color = tuple(max(0, min(255, int(c * prompt_pulse))) for c in (180, 220, 200))
+            prompt = fm.body().render("Press SPACE to select loadout", True,
+                                     prompt_color)
+            screen.blit(prompt,
+                        prompt.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 70)))
+
+        # Version / credits
+        ver = fm.tiny().render("v1.0  —  Mutagen Arena: Project Sentinel", True,
+                               (40, 50, 60))
+        screen.blit(ver, ver.get_rect(center=(WIDTH // 2, HEIGHT - 20)))
 
     def _render_combat(self, screen: pygame.Surface) -> None:
         # Arena draws world (background, enemies, projectiles)
@@ -316,12 +460,184 @@ class GameController:
         if self.debug_overlay:
             self._render_debug_overlay(screen)
 
-    def _render_end_screen(self, screen: pygame.Surface, text: str, color) -> None:
-        screen.fill((10, 14, 26))
-        msg    = self.font_title.render(text, True, color)
-        prompt = self.font_body.render("Press ENTER to return to title", True, (200, 200, 200))
-        screen.blit(msg,    msg.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
-        screen.blit(prompt, prompt.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50)))
+    def _render_victory(self, screen: pygame.Surface) -> None:
+        dt = 1 / 60
+        self._end_time += dt
+
+        if self._end_particles:
+            self._end_particles.update(dt)
+
+        # Fade in
+        if self._end_fade_in > 0:
+            self._end_fade_in = max(0, self._end_fade_in - int(300 * dt))
+
+        # Background gradient — dark green/cyan
+        for y_band in range(0, HEIGHT, 4):
+            frac = y_band / HEIGHT
+            r = int(4 + 6 * frac)
+            g = int(12 + 10 * frac)
+            b = int(16 + 14 * frac)
+            pygame.draw.rect(screen, (r, g, b), (0, y_band, WIDTH, 4))
+
+        # Particles
+        if self._end_particles:
+            self._end_particles.draw(screen)
+
+        draw_scanlines(screen, alpha=5)
+        draw_vignette(screen, intensity=60)
+
+        # Triumphant glow expansion
+        pulse = 0.5 + 0.5 * math.sin(self._end_time * 2.0)
+        glow_r = int(200 + 50 * pulse)
+        glow_surf = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
+        glow_color = (60, 220, 140, int(15 * pulse))
+        pygame.draw.circle(glow_surf, glow_color, (glow_r, glow_r), glow_r)
+        screen.blit(glow_surf, (WIDTH // 2 - glow_r, HEIGHT // 2 - glow_r - 40))
+
+        # Title
+        title_color = pulse_color((100, 255, 140), 0.7 + 0.3 * pulse)
+        title = fm.mega().render("PURGE COMPLETE", True, title_color)
+        screen.blit(title, title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40)))
+
+        # Decorative divider
+        div_y = HEIGHT // 2 + 5
+        div_w = 400
+        div_surf = pygame.Surface((div_w, 1), pygame.SRCALPHA)
+        div_surf.fill((*title_color, int(50 * pulse)))
+        screen.blit(div_surf, (WIDTH // 2 - div_w // 2, div_y))
+
+        # Stats panel
+        stats_y = HEIGHT // 2 + 25
+        panel_rect = pygame.Rect(WIDTH // 2 - 200, stats_y, 400, 100)
+        draw_panel(screen, panel_rect,
+                   border_color=(50, 120, 80),
+                   bg_color=(6, 14, 10, 200),
+                   border_radius=8)
+
+        stat_font = fm.body()
+        wave_text = stat_font.render(f"Waves Survived: {self.wave_n}", True,
+                                     (180, 255, 200))
+        screen.blit(wave_text, (panel_rect.x + 20, stats_y + 15))
+
+        upload_text = stat_font.render(f"Purge Code: 100% COMPLETE", True,
+                                       (120, 255, 160))
+        screen.blit(upload_text, (panel_rect.x + 20, stats_y + 42))
+
+        if self.player:
+            hp_text = stat_font.render(
+                f"Final HP: {int(self.player.hp)}/{int(self.player.max_hp)}",
+                True, (180, 220, 200)
+            )
+            screen.blit(hp_text, (panel_rect.x + 20, stats_y + 69))
+
+        # Prompt
+        if self._end_time > 1.5:
+            prompt_pulse = 0.5 + 0.5 * math.sin(self._end_time * 2.5)
+            prompt_color = tuple(max(0, min(255, int(c * prompt_pulse))) for c in (160, 200, 180))
+            prompt = fm.body().render("Press ENTER to return to title", True,
+                                     prompt_color)
+            screen.blit(prompt,
+                        prompt.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 160)))
+
+        # Fade in
+        if self._end_fade_in > 0:
+            draw_fade(screen, self._end_fade_in)
+
+    def _render_defeat(self, screen: pygame.Surface) -> None:
+        dt = 1 / 60
+        self._end_time += dt
+
+        if self._end_particles:
+            self._end_particles.update(dt)
+
+        # Fade in
+        if self._end_fade_in > 0:
+            self._end_fade_in = max(0, self._end_fade_in - int(200 * dt))
+
+        # Background gradient — dark red
+        for y_band in range(0, HEIGHT, 4):
+            frac = y_band / HEIGHT
+            r = int(14 + 10 * frac)
+            g = int(6 + 4 * frac)
+            b = int(8 + 6 * frac)
+            pygame.draw.rect(screen, (r, g, b), (0, y_band, WIDTH, 4))
+
+        # Particles
+        if self._end_particles:
+            self._end_particles.draw(screen)
+
+        draw_scanlines(screen, alpha=6)
+        draw_vignette(screen, intensity=100)
+
+        # Red vignette pulse
+        pulse = 0.5 + 0.5 * math.sin(self._end_time * 1.5)
+        red_overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        red_overlay.fill((120, 0, 0, max(0, min(255, int(15 * pulse)))))
+        screen.blit(red_overlay, (0, 0))
+
+        # Glitch title
+        glitch_intensity = 0.15 * abs(math.sin(self._end_time * 5.0))
+        title_color = pulse_color((255, 80, 80), 0.6 + 0.4 * pulse)
+        title = render_glitch_text(fm.mega(), "CONTAINMENT BREACH",
+                                    title_color, glitch_intensity)
+        screen.blit(title, title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40)))
+
+        # Horizontal glitch lines (brief random offset)
+        if glitch_intensity > 0.05:
+            import random
+            for _ in range(2):
+                gy = random.randint(0, HEIGHT)
+                gh = random.randint(1, 3)
+                gx_off = random.randint(-8, 8)
+                line_rect = pygame.Rect(0, gy, WIDTH, gh)
+                glitch_surf = pygame.Surface((WIDTH, gh), pygame.SRCALPHA)
+                glitch_surf.fill((255, 40, 40, 30))
+                screen.blit(glitch_surf, (gx_off, gy))
+
+        # Decorative divider
+        div_y = HEIGHT // 2 + 5
+        div_w = 400
+        div_surf = pygame.Surface((div_w, 1), pygame.SRCALPHA)
+        div_surf.fill((*title_color, int(40 * pulse)))
+        screen.blit(div_surf, (WIDTH // 2 - div_w // 2, div_y))
+
+        # Stats panel
+        stats_y = HEIGHT // 2 + 25
+        panel_rect = pygame.Rect(WIDTH // 2 - 200, stats_y, 400, 100)
+        draw_panel(screen, panel_rect,
+                   border_color=(100, 40, 40),
+                   bg_color=(14, 6, 8, 200),
+                   border_radius=8)
+
+        stat_font = fm.body()
+        wave_text = stat_font.render(f"Waves Survived: {self.wave_n}", True,
+                                     (255, 180, 180))
+        screen.blit(wave_text, (panel_rect.x + 20, stats_y + 15))
+
+        upload_text = stat_font.render(
+            f"Purge Code: {self.upload_pct:.0f}%", True, (255, 160, 140)
+        )
+        screen.blit(upload_text, (panel_rect.x + 20, stats_y + 42))
+
+        if self.player:
+            dmg_text = stat_font.render(
+                f"Damage Taken: {int(self.player.total_damage_taken)}",
+                True, (255, 140, 140)
+            )
+            screen.blit(dmg_text, (panel_rect.x + 20, stats_y + 69))
+
+        # Prompt
+        if self._end_time > 2.0:
+            prompt_pulse = 0.5 + 0.5 * math.sin(self._end_time * 2.5)
+            prompt_color = tuple(max(0, min(255, int(c * prompt_pulse))) for c in (200, 160, 160))
+            prompt = fm.body().render("Press ENTER to return to title", True,
+                                     prompt_color)
+            screen.blit(prompt,
+                        prompt.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 160)))
+
+        # Fade in
+        if self._end_fade_in > 0:
+            draw_fade(screen, self._end_fade_in)
 
     def _render_debug_overlay(self, screen: pygame.Surface) -> None:
         """F3 overlay — SA temperature, gene means per archetype, top fitness."""
@@ -353,40 +669,3 @@ class GameController:
             surf = self.font_small.render(line, True, (255, 255, 127))
             screen.blit(surf, (24, y))
             y += 18
-
-
-# ── main.py integration note ──────────────────────────────────────────────────
-"""
-In main.py, the game loop should look roughly like this:
-
-    import pygame
-    from src.systems.controller import GameController, State
-    from src.ui.loadout_screen import LoadoutScreen
-    from src.core.constants import SCREEN_W, SCREEN_H, FPS, TITLE
-
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-    pygame.display.set_caption(TITLE)
-    clock  = pygame.time.Clock()
-
-    controller = GameController()
-
-    while controller.running:
-        dt     = clock.tick(FPS) / 1000.0
-        events = pygame.event.get()
-
-        # Handle loadout screen as a blocking call when state is LOADOUT
-        if controller.state is State.LOADOUT:
-            result = LoadoutScreen(screen, clock).run()
-            if result is None:
-                controller.running = False   # player quit
-            else:
-                controller._start_run(result)
-        else:
-            controller.handle_events(events)
-            controller.update(dt, events)
-            controller.render(screen)
-            pygame.display.flip()
-
-    pygame.quit()
-"""

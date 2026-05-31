@@ -4,6 +4,8 @@ loadout_screen.py - Weapon loadout selection screen.
 Shows all 4 available weapons. Player selects up to PLAYER_MAX_LOADOUT (2).
 Returns the selected weapon names to the game controller.
 
+Premium version with animated hex grid, weapon icons, neon selection glow,
+visual stat bars, and styled confirm button.
 """
 
 import pygame
@@ -15,16 +17,15 @@ from src.core.constants import (
     C_BG, C_WHITE, C_GRAY, C_DARK, C_ACCENT, C_DANGER, C_WARN,
     C_PLAYER,
 )
+from src.ui import font_manager as fm
+from src.ui.ui_helpers import (
+    draw_panel, draw_scanlines, draw_vignette, draw_pill_bar,
+    draw_weapon_icon, brighten, dim, with_alpha, lerp_color,
+    ParticleSystem, pulse_color,
+)
 
 
-# ── Color helpers ────────────────────────────────────────────────────────────
-
-def _sysf(size, bold=False):
-    try:
-        return pygame.font.SysFont("Courier New", size, bold=bold)
-    except Exception:
-        return pygame.font.Font(None, size)
-
+# ── Stat display config ─────────────────────────────────────────────────────
 
 _STAT_LABELS = {
     "ranged":  [("Damage",   "damage"),
@@ -48,6 +49,12 @@ _TYPE_BADGE = {
     "utility": ((100, 255, 160), "UTILITY"),
 }
 
+# Max values for stat bars (for normalization)
+_STAT_MAXES = {
+    "damage": 100, "range": 700, "cooldown": 3.0,
+    "stamina_cost": 25, "projectile_speed": 15,
+}
+
 
 class LoadoutScreen:
     """
@@ -56,9 +63,9 @@ class LoadoutScreen:
     and returns a list of 2 weapon name strings.
     """
 
-    CARD_W = 240
-    CARD_H = 300
-    GAP    = 24
+    CARD_W = 290
+    CARD_H = 400
+    GAP    = 12
 
     def __init__(self, screen: pygame.Surface, clock: pygame.time.Clock):
         self.screen = screen
@@ -69,25 +76,19 @@ class LoadoutScreen:
         self._confirm_hover = False
         self._time = 0.0
 
-        # Pre-build fonts
-        self.f_title  = _sysf(52, bold=True)
-        self.f_sub    = _sysf(18)
-        self.f_card   = _sysf(17, bold=True)
-        self.f_stat   = _sysf(14)
-        self.f_badge  = _sysf(12, bold=True)
-        self.f_desc   = _sysf(13)
-        self.f_btn    = _sysf(20, bold=True)
-        self.f_hint   = _sysf(14)
-
         # Layout: center 4 cards
         total_w = 4 * self.CARD_W + 3 * self.GAP
         self._start_x = (SCREEN_W - total_w) // 2
-        self._cards_y = 180
+        self._cards_y = 130
 
         # Confirm button rect
         self._btn_rect = pygame.Rect(
-            SCREEN_W // 2 - 140, SCREEN_H - 90, 280, 48
+            SCREEN_W // 2 - 160, SCREEN_H - 90, 320, 52
         )
+
+        # Particles
+        self._particles = ParticleSystem(count=25, bounds=(SCREEN_W, SCREEN_H),
+                                          color=(50, 120, 80))
 
     # ── Main loop ─────────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ class LoadoutScreen:
         while True:
             dt = self.clock.tick(FPS) / 1000.0
             self._time += dt
+            self._particles.update(dt)
 
             mouse_pos = pygame.mouse.get_pos()
             self._update_hover(mouse_pos)
@@ -184,9 +186,20 @@ class LoadoutScreen:
 
     def _draw(self):
         surf = self.screen
-        surf.fill(C_BG)
+
+        # Background gradient
+        for y_band in range(0, SCREEN_H, 4):
+            frac = y_band / SCREEN_H
+            r = int(6 + 6 * frac)
+            g = int(8 + 10 * frac)
+            b = int(16 + 14 * frac)
+            pygame.draw.rect(surf, (r, g, b), (0, y_band, SCREEN_W, 4))
 
         self._draw_bg_grid(surf)
+        self._particles.draw(surf)
+        draw_scanlines(surf, alpha=4)
+        draw_vignette(surf, intensity=50)
+
         self._draw_header(surf)
         self._draw_cards(surf)
         self._draw_selection_summary(surf)
@@ -194,8 +207,11 @@ class LoadoutScreen:
         self._draw_instructions(surf)
 
     def _draw_bg_grid(self, surf):
+        """Animated hex-grid pattern."""
         step  = 60
-        alpha = 25 + int(10 * math.sin(self._time * 0.5))
+        pulse = 0.5 + 0.5 * math.sin(self._time * 0.4)
+        alpha = int(15 + 10 * pulse)
+
         for x in range(0, SCREEN_W + step, step):
             s = pygame.Surface((1, SCREEN_H), pygame.SRCALPHA)
             s.fill((40, 80, 60, alpha))
@@ -205,23 +221,41 @@ class LoadoutScreen:
             s.fill((40, 80, 60, alpha))
             surf.blit(s, (0, y))
 
+        # Hex accents at intersections
+        hex_alpha = int(alpha * 0.4)
+        for gx in range(0, SCREEN_W + step, step):
+            for gy in range(0, SCREEN_H + step, step):
+                if (gx + gy) % (step * 2) == 0:
+                    ps = pygame.Surface((6, 6), pygame.SRCALPHA)
+                    pygame.draw.circle(ps, (60, 120, 80, hex_alpha), (3, 3), 3)
+                    surf.blit(ps, (gx - 3, gy - 3))
+
     def _draw_header(self, surf):
-        # Pulsing accent line
-        pulse = 0.5 + 0.5 * math.sin(self._time * 1.5)
+        # Pulsing accent
+        pulse = 0.6 + 0.4 * math.sin(self._time * 1.5)
 
-        title = self.f_title.render("MUTAGEN ARENA", True, C_ACCENT)
-        surf.blit(title, (SCREEN_W // 2 - title.get_width() // 2, 28))
+        title_font = fm.title()
+        title_color = pulse_color(C_ACCENT, pulse)
+        title = title_font.render("MUTAGEN ARENA", True, title_color)
+        surf.blit(title, (SCREEN_W // 2 - title.get_width() // 2, 24))
 
-        sub = self.f_sub.render(
+        sub = fm.body().render(
             "SELECT YOUR LOADOUT  —  choose 2 weapons", True, C_GRAY
         )
-        surf.blit(sub, (SCREEN_W // 2 - sub.get_width() // 2, 98))
+        surf.blit(sub, (SCREEN_W // 2 - sub.get_width() // 2, 80))
 
-        # Divider
-        line_color = tuple(int(c * pulse) for c in C_ACCENT)
-        pygame.draw.line(surf, line_color,
-                         (SCREEN_W // 2 - 260, 130),
-                         (SCREEN_W // 2 + 260, 130), 1)
+        # Divider with corner accents
+        div_y = 115
+        div_w = 520
+        div_x = SCREEN_W // 2 - div_w // 2
+        line_surf = pygame.Surface((div_w, 1), pygame.SRCALPHA)
+        line_surf.fill((*title_color, int(60 * pulse)))
+        surf.blit(line_surf, (div_x, div_y))
+
+        acc = 16
+        pygame.draw.line(surf, title_color, (div_x, div_y), (div_x + acc, div_y), 2)
+        pygame.draw.line(surf, title_color,
+                         (div_x + div_w - acc, div_y), (div_x + div_w, div_y), 2)
 
     def _draw_cards(self, surf):
         for i, name in enumerate(WEAPON_NAMES):
@@ -236,139 +270,221 @@ class LoadoutScreen:
     def _draw_card(self, surf, x, y, name, selected, hovered, order, key_num):
         cfg  = WEAPONS[name]
         w, h = self.CARD_W, self.CARD_H
+        wtype = cfg["type"]
+        weapon_color = cfg.get("color", C_ACCENT)
 
         # Elevation / lift on hover or select
-        lift = 10 if selected else (4 if hovered else 0)
+        lift = 12 if selected else (6 if hovered else 0)
         y   -= lift
 
-        # Background
+        # Colors
         if selected:
-            bg = (18, 48, 30, 240)
+            bg = (14, 45, 28, 240)
+            border = weapon_color
+            bw = 2
         elif hovered:
-            bg = (14, 24, 40, 220)
+            bg = (12, 22, 38, 225)
+            border = weapon_color
+            bw = 1
         else:
-            bg = (10, 16, 28, 200)
+            bg = (8, 14, 24, 200)
+            border = (30, 40, 55)
+            bw = 1
 
-        panel = pygame.Surface((w, h), pygame.SRCALPHA)
-        panel.fill(bg)
-        surf.blit(panel, (x, y))
+        card_rect = pygame.Rect(x, y, w, h)
+        draw_panel(surf, card_rect, border_color=border,
+                   bg_color=bg, border_width=bw, border_radius=8)
 
-        # Border
-        border_color = (cfg.get("color", C_ACCENT) if selected
-                        else (cfg.get("color", C_GRAY) if hovered
-                              else (35, 45, 65)))
-        border_w = 2 if selected else 1
-        pygame.draw.rect(surf, border_color, (x, y, w, h), border_w,
-                         border_radius=4)
+        # Selection glow pulse
+        if selected:
+            glow_alpha = int(25 + 10 * math.sin(self._time * 3.0))
+            glow = pygame.Surface((w + 12, h + 12), pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*weapon_color[:3], glow_alpha),
+                             pygame.Rect(0, 0, w + 12, h + 12),
+                             border_radius=12)
+            surf.blit(glow, (x - 6, y - 6))
+        elif hovered:
+            glow = pygame.Surface((w + 8, h + 8), pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*weapon_color[:3], 15),
+                             pygame.Rect(0, 0, w + 8, h + 8),
+                             border_radius=10)
+            surf.blit(glow, (x - 4, y - 4))
 
-        # Type badge
-        wtype  = cfg["type"]
+        # Top accent stripe
+        accent = pygame.Surface((w - 2, 3), pygame.SRCALPHA)
+        accent.fill((*weapon_color[:3], 160 if selected else (80 if hovered else 40)))
+        surf.blit(accent, (x + 1, y + 1))
+
+        # Weapon icon (centered, top area)
+        icon_size = 36
+        icon_x = x + w // 2 - icon_size // 2
+        icon_y = y + 14
+        icon_col = weapon_color if (selected or hovered) else dim(weapon_color, 0.5)
+        draw_weapon_icon(surf, icon_x, icon_y, icon_size, wtype, icon_col)
+
+        # Type badge (below icon)
         b_col, b_label = _TYPE_BADGE.get(wtype, (C_GRAY, wtype.upper()))
-        badge  = self.f_badge.render(b_label, True, b_col)
-        bx     = x + w - badge.get_width() - 8
-        by     = y + 8
-        surf.blit(badge, (bx, by))
+        badge_font = fm.tiny()
+        badge = badge_font.render(b_label, True,
+                                  b_col if (selected or hovered) else dim(b_col, 0.5))
+        badge_rect = badge.get_rect(center=(x + w // 2, y + 56))
+        surf.blit(badge, badge_rect)
 
         # Weapon name
-        name_surf = self.f_card.render(name, True,
-                                       cfg.get("color", C_WHITE))
-        surf.blit(name_surf, (x + 10, y + 8))
+        name_font = fm.header()
+        name_color = weapon_color if (selected or hovered) else C_GRAY
+        name_surf = name_font.render(name, True, name_color)
+        surf.blit(name_surf, name_surf.get_rect(center=(x + w // 2, y + 80)))
 
         # Divider
-        pygame.draw.line(surf, border_color,
-                         (x + 8, y + 34), (x + w - 8, y + 34), 1)
+        div_y = y + 100
+        pygame.draw.line(surf, (30, 40, 55) if not selected else dim(weapon_color, 0.3),
+                         (x + 12, div_y), (x + w - 12, div_y), 1)
 
         # Description
-        desc  = cfg.get("description", "")
-        lines = _wrap_text(desc, self.f_desc, w - 20)
+        desc = cfg.get("description", "")
+        lines = _wrap_text(desc, fm.small(), w - 24)
+        desc_color = (160, 165, 175) if (selected or hovered) else (100, 105, 115)
         for j, line in enumerate(lines[:3]):
-            ls = self.f_desc.render(line, True, C_GRAY)
-            surf.blit(ls, (x + 10, y + 42 + j * 18))
+            ls = fm.small().render(line, True, desc_color)
+            surf.blit(ls, (x + 12, y + 110 + j * 16))
 
-        # Stats
+        # Stats as visual bars
         stat_keys = _STAT_LABELS.get(wtype, _STAT_LABELS["ranged"])
-        sy = y + 42 + len(lines[:3]) * 18 + 12
-        pygame.draw.line(surf, (30, 45, 65),
-                         (x + 8, sy - 4), (x + w - 8, sy - 4), 1)
+        sy = y + 110 + len(lines[:3]) * 16 + 10
+        pygame.draw.line(surf, (25, 35, 50),
+                         (x + 12, sy - 4), (x + w - 12, sy - 4), 1)
 
         for label, key in stat_keys:
             val = cfg.get(key)
             if val is None:
                 continue
-            label_s = self.f_stat.render(f"{label:<10}", True, C_GRAY)
-            val_s   = self.f_stat.render(str(val),       True, C_WHITE)
-            surf.blit(label_s, (x + 10, sy))
-            surf.blit(val_s,   (x + w - val_s.get_width() - 10, sy))
-            sy += 20
+
+            label_font = fm.tiny()
+            label_s = label_font.render(f"{label}", True, C_GRAY)
+            surf.blit(label_s, (x + 12, sy + 1))
+
+            # Value text
+            val_s = label_font.render(str(val), True, C_WHITE)
+            surf.blit(val_s, (x + w - val_s.get_width() - 12, sy + 1))
+
+            # Mini stat bar
+            max_val = _STAT_MAXES.get(key, 100)
+            # Invert for cooldown (lower = better)
+            if key == "cooldown":
+                ratio = 1.0 - min(1.0, val / max_val)
+            else:
+                ratio = min(1.0, val / max_val)
+
+            bar_y = sy + 15
+            bar_w = w - 24
+            bar_fg = weapon_color if (selected or hovered) else dim(weapon_color, 0.4)
+            draw_pill_bar(surf, x + 12, bar_y, bar_w, 4, ratio, bar_fg,
+                          bg_color=(18, 22, 32), border_color=(28, 34, 45))
+
+            sy += 22
 
         # Selected order badge
         if order is not None:
-            badge_s = self.f_btn.render(f"SLOT {order}", True, C_BG)
-            bw      = badge_s.get_width() + 16
-            bh      = badge_s.get_height() + 8
-            br      = pygame.Rect(x + w//2 - bw//2,
-                                  y + h - bh - 10, bw, bh)
-            pygame.draw.rect(surf, cfg.get("color", C_ACCENT), br,
-                             border_radius=4)
-            surf.blit(badge_s, (br.x + 8, br.y + 4))
+            badge_font = fm.body()
+            badge_s = badge_font.render(f"SLOT {order}", True, C_BG)
+            bw_badge = badge_s.get_width() + 20
+            bh_badge = badge_s.get_height() + 10
+            br = pygame.Rect(x + w // 2 - bw_badge // 2,
+                             y + h - bh_badge - 12, bw_badge, bh_badge)
+            pygame.draw.rect(surf, weapon_color, br, border_radius=6)
+            surf.blit(badge_s, (br.x + 10, br.y + 5))
         elif hovered and name not in self._selected:
-            hint_s = self.f_stat.render(
-                "CLICK to select" if len(self._selected) < PLAYER_MAX_LOADOUT
-                else "LOADOUT FULL",
-                True, C_GRAY
-            )
-            surf.blit(hint_s,
-                      (x + w//2 - hint_s.get_width()//2, y + h - 22))
+            hint_text = ("CLICK to select" if len(self._selected) < PLAYER_MAX_LOADOUT
+                         else "LOADOUT FULL")
+            pulse = 0.6 + 0.4 * math.sin(self._time * 3.0)
+            hint_color = pulse_color(weapon_color[:3], pulse)
+            hint_s = fm.small().render(hint_text, True, hint_color)
+            surf.blit(hint_s, hint_s.get_rect(center=(x + w // 2, y + h - 24)))
 
         # Key hint
-        key_s = self.f_stat.render(f"[{key_num+1}]", True, C_GRAY)
-        surf.blit(key_s, (x + 6, y + h - 20))
+        key_s = fm.tiny().render(f"[{key_num + 1}]", True, (60, 70, 85))
+        surf.blit(key_s, (x + 8, y + h - 18))
 
     def _draw_selection_summary(self, surf):
         """Show the 2 selected weapon names side-by-side above the button."""
-        y   = self._btn_rect.top - 40
+        y   = self._btn_rect.top - 44
         cx  = SCREEN_W // 2
+        slot_w = 240
         gap = 30
 
         for i in range(PLAYER_MAX_LOADOUT):
-            bx = cx - self.CARD_W//2 - gap//2 + i * (self.CARD_W + gap)
+            bx = cx - slot_w - gap // 2 + i * (slot_w + gap)
+
             if i < len(self._selected):
                 name    = self._selected[i]
                 color   = WEAPONS[name].get("color", C_ACCENT)
-                lbl     = self.f_card.render(f"SLOT {i+1}: {name}", True, color)
+
+                # Slot panel
+                slot_rect = pygame.Rect(bx, y - 4, slot_w, 28)
+                draw_panel(surf, slot_rect,
+                           border_color=dim(color, 0.5),
+                           bg_color=(10, 20, 16, 180),
+                           border_radius=4)
+
+                lbl = fm.hud().render(f"SLOT {i+1}: {name}", True, color)
+                surf.blit(lbl, (bx + 8, y))
             else:
-                lbl = self.f_card.render(f"SLOT {i+1}: — empty —", True, C_DARK)
-            surf.blit(lbl, (bx, y))
+                slot_rect = pygame.Rect(bx, y - 4, slot_w, 28)
+                draw_panel(surf, slot_rect,
+                           border_color=(30, 35, 45),
+                           bg_color=(8, 12, 18, 140),
+                           border_radius=4)
+
+                lbl = fm.hud().render(f"SLOT {i+1}: — empty —", True, C_DARK)
+                surf.blit(lbl, (bx + 8, y))
 
     def _draw_confirm_button(self, surf):
         ready = len(self._selected) == PLAYER_MAX_LOADOUT
 
         if ready:
-            pulse = 0.75 + 0.25 * math.sin(self._time * 3)
-            color = tuple(int(c * pulse) for c in C_ACCENT)
-            bg    = (18, 50, 30, 230)
+            pulse = 0.7 + 0.3 * math.sin(self._time * 3)
+            color = pulse_color(C_ACCENT, pulse)
+            bg = (14, 42, 28, 230)
         else:
-            color = (50, 60, 70)
-            bg    = (12, 16, 22, 200)
+            color = (45, 55, 65)
+            bg = (10, 14, 20, 200)
 
-        r   = self._btn_rect
-        s   = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
-        s.fill(bg)
-        surf.blit(s, r.topleft)
-        pygame.draw.rect(surf, color, r, 2, border_radius=6)
+        r = self._btn_rect
+        draw_panel(surf, r, border_color=color, bg_color=bg,
+                   border_width=2 if ready else 1, border_radius=8)
+
+        # Glow behind button when ready
+        if ready and self._confirm_hover:
+            glow = pygame.Surface((r.w + 12, r.h + 12), pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*C_ACCENT[:3], 20),
+                             pygame.Rect(0, 0, r.w + 12, r.h + 12),
+                             border_radius=12)
+            surf.blit(glow, (r.x - 6, r.y - 6))
+
+        # Sweep animation when ready
+        if ready:
+            sweep_x = int((self._time * 120) % (r.w + 60)) - 30
+            sweep_surf = pygame.Surface((30, r.h), pygame.SRCALPHA)
+            for sx in range(30):
+                a = int(20 * math.sin(sx / 30 * math.pi))
+                pygame.draw.line(sweep_surf, (255, 255, 255, a),
+                                 (sx, 0), (sx, r.h))
+            surf.blit(sweep_surf, (r.x + sweep_x, r.y))
 
         label_str = ("▶  START RUN  ◀" if ready
                      else f"SELECT  {PLAYER_MAX_LOADOUT - len(self._selected)}  MORE  WEAPON(S)")
-        label = self.f_btn.render(label_str, True,
+        label_font = fm.body()
+        label = label_font.render(label_str, True,
                                    color if ready else C_GRAY)
         surf.blit(label,
-                  (r.x + r.w//2 - label.get_width()//2,
-                   r.y + r.h//2 - label.get_height()//2))
+                  (r.x + r.w // 2 - label.get_width() // 2,
+                   r.y + r.h // 2 - label.get_height() // 2))
 
     def _draw_instructions(self, surf):
-        text = ("Keys [1-4] toggle weapons    ENTER to confirm    ESC to quit")
-        s    = self.f_hint.render(text, True, (60, 70, 90))
-        surf.blit(s, (SCREEN_W//2 - s.get_width()//2, SCREEN_H - 22))
+        text = "Keys [1-4] toggle weapons    ENTER to confirm    ESC to quit"
+        s = fm.tiny().render(text, True, (50, 60, 75))
+        surf.blit(s, (SCREEN_W // 2 - s.get_width() // 2, SCREEN_H - 22))
 
 
 # ── Text wrap helper ──────────────────────────────────────────────────────────
