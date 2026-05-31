@@ -56,7 +56,7 @@ C_HUD_PANEL    = (8,   12,  24, 200)
 # ── Player config  ────────────────────────────────────────────────────
 PLAYER_HP              = 150
 PLAYER_SPEED           = 5          # game units → * SPEED_SCALE px/s
-PLAYER_RADIUS          = 18
+PLAYER_RADIUS          = 27
 PLAYER_HP_REGEN_WAVE   = 20         # HP restored at wave end
 PLAYER_INV_FRAMES      = 0.5        # invincibility seconds after hit
 

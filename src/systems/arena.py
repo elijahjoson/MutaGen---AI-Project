@@ -20,6 +20,44 @@ class Arena:
         self.spawn_queue: list[Chromosome] = []
         self.spawn_timer: float = 0.0
         self.wave_complete: bool = False
+        
+        self.bg_surface = pygame.Surface((ARENA_W, ARENA_H))
+        self.bg_surface.fill((15, 20, 35))
+        
+        try:
+            # Scale down to 2.0 so the tiles aren't massive
+            floor_img = pygame.transform.scale_by(pygame.image.load("assets/environment/floor_tile.png").convert_alpha(), 0.5)
+            
+            # FIXED: Looking for "wall_down.png" to match your file!
+            wall_top    = pygame.transform.scale_by(pygame.image.load("assets/environment/wall_top.png").convert_alpha(), 5.0)
+            wall_bottom = pygame.transform.scale_by(pygame.image.load("assets/environment/wall_down.png").convert_alpha(), 5.0) 
+            wall_left   = pygame.transform.scale_by(pygame.image.load("assets/environment/wall_left.png").convert_alpha(), 5.0)
+            wall_right  = pygame.transform.scale_by(pygame.image.load("assets/environment/wall_right.png").convert_alpha(), 5.0)
+            
+            # 1. Fill the ENTIRE arena with floor tiles
+            fw, fh = floor_img.get_width(), floor_img.get_height()
+            for x in range(0, ARENA_W, fw):
+                for y in range(0, ARENA_H, fh):
+                    self.bg_surface.blit(floor_img, (x, y))
+                    
+            # 2. Draw the Top and Bottom walls
+            wt, ht = wall_top.get_width(), wall_top.get_height()
+            wb, hb = wall_bottom.get_width(), wall_bottom.get_height()
+            for x in range(0, ARENA_W, wt):
+                self.bg_surface.blit(wall_top, (x, 0))
+            for x in range(0, ARENA_W, wb):
+                self.bg_surface.blit(wall_bottom, (x, ARENA_H - hb))
+                
+            # 3. Draw the Left and Right walls
+            wl, hl = wall_left.get_width(), wall_left.get_height()
+            wr, hr = wall_right.get_width(), wall_right.get_height()
+            for y in range(0, ARENA_H, hl):
+                self.bg_surface.blit(wall_left, (0, y))
+            for y in range(0, ARENA_H, hr):
+                self.bg_surface.blit(wall_right, (ARENA_W - wr, y))
+                
+        except Exception as e:
+            print(f"Arena background load failed: {e}")
 
     def begin_wave(self, chromosomes: list[Chromosome]) -> None:
         self.enemies.clear()
@@ -112,7 +150,10 @@ class Arena:
                 ))
 
     def draw(self, screen: pygame.Surface, camera) -> None:
-        screen.fill((15, 20, 35))
+        # --- NEW ENVIRONMENT DRAWING CODE ---
+        screen_x, screen_y = camera.world_to_screen(0, 0)
+        screen.blit(self.bg_surface, (int(screen_x), int(screen_y)))
+
         for b in self.enemy_bullets:
             b.draw(screen, camera)
         for e in self.enemies:

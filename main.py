@@ -27,15 +27,12 @@ def main():
         
         # Capture mouse clicks and keyboard presses
         events = pygame.event.get()
-
+        screen.fill((10, 14, 26))
         # Feed the events, screen, and clock directly into the controller
         controller.handle_events(events)
         controller.update(dt, events, screen=screen, clock=clock)
-        
-        # Draw everything to the screen
-        if controller.running:
-            controller.render(screen)
-            pygame.display.flip()
+        controller.render(screen)
+        pygame.display.flip()
 
     # 5. Shut down cleanly when the player closes the window
     pygame.quit()

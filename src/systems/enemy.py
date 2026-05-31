@@ -2,8 +2,9 @@
 import pygame
 import math
 from src.ai.chromosome import Chromosome, Archetype
-from src.core.constants import ARCHETYPES, SPEED_SCALE
+from src.core.constants import ARCHETYPES, SPEED_SCALE, ARENA_H, ARENA_W
 from src.systems.bullet import EnemyBullet
+from src.entities.weapon import Projectile
 
 
 class Enemy:
@@ -49,11 +50,22 @@ class Enemy:
             if dist > self.attack_range:
                 self._steer_towards(player.x, player.y, dt)
             elif self.attack_cd <= 0:
-                proj_speed = ARCHETYPES["Ranged"]["projectile_speed"]
-                enemy_bullets.append(
-                    EnemyBullet(self.x, self.y, player.x, player.y,
-                                self.chrom.damage, proj_speed)
-                )
+                # 1. Calculate direction
+                dx = (player.x - self.x) / dist
+                dy = (player.y - self.y) / dist
+                
+                # 2. Spawn the universal Projectile (uses the asset path!)
+                enemy_bullets.append(Projectile(
+                    self.x, self.y, dx, dy,
+                    speed_units=ARCHETYPES["Ranged"]["projectile_speed"],
+                    damage=self.chrom.damage,
+                    radius=5, # Or your preferred size
+                    color=(255, 0, 0),
+                    max_range=500,
+                    lifespan=2.0,
+                    image_path="assets/sprites/enemies/bullet_enemy.png" # Updated path
+                ))
+                
                 self.damage_dealt += self.chrom.damage
                 self.attack_cd = self.chrom.attack_cd
 
@@ -78,11 +90,28 @@ class Enemy:
         angle = math.atan2(target_y - self.y, target_x - self.x)
         self.x += math.cos(angle) * self.chrom.speed * SPEED_SCALE * dt
         self.y += math.sin(angle) * self.chrom.speed * SPEED_SCALE * dt
+        self._clamp_to_arena()
 
     def _steer_away(self, target_x: float, target_y: float, dt: float):
         angle = math.atan2(target_y - self.y, target_x - self.x)
         self.x -= math.cos(angle) * self.chrom.speed * SPEED_SCALE * dt
         self.y -= math.sin(angle) * self.chrom.speed * SPEED_SCALE * dt
+        self._clamp_to_arena()
+
+    def _clamp_to_arena(self):
+        THICK_TOP    = 100
+        THICK_BOTTOM = 40
+        THICK_LEFT   = 16
+        THICK_RIGHT  = 16
+        
+        # Calculate the safe inner bounds using the custom thicknesses
+        min_x = THICK_LEFT + self.radius
+        max_x = ARENA_W - THICK_RIGHT - self.radius
+        min_y = THICK_TOP + self.radius
+        max_y = ARENA_H - THICK_BOTTOM - self.radius
+
+        self.x = max(float(min_x), min(float(max_x), self.x))
+        self.y = max(float(min_y), min(float(max_y), self.y))
 
     def draw(self, screen: pygame.Surface, camera) -> None:
         if not self.alive:

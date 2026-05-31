@@ -13,6 +13,7 @@ Responsibilities:
 
 import pygame
 import math
+from src.core.assets import AssetManager
 from src.core.constants import (
     ARENA_W, ARENA_H, SPEED_SCALE,
     PLAYER_HP, PLAYER_SPEED, PLAYER_RADIUS,
@@ -38,6 +39,23 @@ class Player:
         # World position — start at center of the arena
         self.x: float = ARENA_W / 2
         self.y: float = ARENA_H / 2
+
+        # --- NEW CLEAN ASSET LOADING ---
+        SCALE = 1.5
+        self.sprites = {
+            "Pulse Rifle": AssetManager.get_image("assets/sprites/player/player_pulse.png", SCALE),
+            "Arc Launcher": AssetManager.get_image("assets/sprites/player/player_arc.png", SCALE),
+            "Stasis Trap": AssetManager.get_image("assets/sprites/player/player_trap.png", SCALE),
+            "Shock Blade": AssetManager.get_image("assets/sprites/player/player_blade.png", SCALE)
+        }
+        
+        self.default_sprite = self.sprites["Pulse Rifle"]
+        
+        # Load death and UI sprites (Scale is handled inside the manager!)
+        self.death_sprite = AssetManager.get_image("assets/sprites/player/player_death.png", 1.0)
+        self.crosshair_img = AssetManager.get_image("assets/sprites/player/crosshair.png", 0.2)
+        
+        self.death_timer = 0.0
 
         # Stats
         self.max_hp:  float = float(PLAYER_HP)
@@ -165,8 +183,20 @@ class Player:
         self._clamp_to_arena(nx, ny)
 
     def _clamp_to_arena(self, nx: float, ny: float):
-        self.x = max(float(self.radius), min(float(ARENA_W - self.radius), nx))
-        self.y = max(float(self.radius), min(float(ARENA_H - self.radius), ny))
+        THICK_TOP    = 100
+        THICK_BOTTOM = 40
+        THICK_LEFT   = 16
+        THICK_RIGHT  = 16
+        
+        # Calculate the safe inner bounds using the custom thicknesses
+        min_x = THICK_LEFT + self.radius
+        max_x = ARENA_W - THICK_RIGHT - self.radius
+        min_y = THICK_TOP + self.radius
+        max_y = ARENA_H - THICK_BOTTOM - self.radius
+
+        # Clamp the player's position inside those bounds
+        self.x = max(float(min_x), min(float(max_x), nx))
+        self.y = max(float(min_y), min(float(max_y), ny))
 
     # ── Dash ──────────────────────────────────────────────────────────────────
 
@@ -282,21 +312,33 @@ class Player:
 
     def draw(self, surf: pygame.Surface, camera):
         """Draw the player and all active weapon effects."""
-        # Draw all weapon effects (projectiles, traps, swing hitboxes)
+        # 1. KEEP: Draw all weapon effects (projectiles, traps, swing hitboxes)
         for weapon in self.loadout:
             weapon.draw(surf, camera)
-
-        if not self.alive:
-            return
-
-        # Invincibility flicker — skip drawing every other frame
-        if self._flicker:
-            return
 
         sx, sy = camera.world_to_screen(self.x, self.y)
         isx, isy = int(sx), int(sy)
 
-        # Dash glow
+        # 2. KEEP: Death check
+        if not self.alive:
+            if self.death_sprite:
+                pygame.mouse.set_visible(True) # <--- ADD THIS: Give the player their mouse back!
+                if getattr(self, 'death_sprite', None):
+                    self.death_timer += 0.05 
+                    scale_factor = 1.0 + (self.death_timer * 2) 
+                
+                # 3. Stop growing after it gets massive (e.g., 4x size)
+                if scale_factor < 4.0:
+                    scaled_death = pygame.transform.scale_by(self.death_sprite, scale_factor)
+                    death_rect = scaled_death.get_rect(center=(isx, isy))
+                    surf.blit(scaled_death, death_rect.topleft)
+            return
+
+        # 3. KEEP: Invincibility flicker — skip drawing every other frame
+        if self._flicker:
+            return
+
+        # 4. KEEP: Dash glow (This will act as a cool under-glow beneath your new sprite!)
         if self._dashing:
             glow_r = self.radius + 10
             gs = pygame.Surface((glow_r*2, glow_r*2), pygame.SRCALPHA)
@@ -304,23 +346,36 @@ class Player:
                                (glow_r, glow_r), glow_r)
             surf.blit(gs, (isx - glow_r, isy - glow_r))
 
-        # Body
-        pygame.draw.circle(surf, C_PLAYER, (isx, isy), self.radius)
+        # --- 5. NEW: SPRITE DRAWING LOGIC (Replaces the circles and lines) ---
+        weapon_name = self.active_weapon.name if self.active_weapon else "Pulse Rifle"
+        base_image = self.sprites.get(weapon_name, self.default_sprite)
 
-        # Gun barrel (points toward cursor)
-        barrel_len = self.radius + 10
-        ex = sx + math.cos(self.facing_angle) * barrel_len
-        ey = sy + math.sin(self.facing_angle) * barrel_len
-        pygame.draw.line(surf, C_PLAYER_BLADE,
-                         (isx, isy), (int(ex), int(ey)), 4)
+        if base_image:
+            # Convert the facing angle to degrees and invert it for Pygame
+            angle_deg = math.degrees(-self.facing_angle)
+            
+            # Rotate the image
+            rotated_image = pygame.transform.rotate(base_image, angle_deg)
+            
+            # The Wobble Fix: Force the center of the image to exactly match the player's X/Y
+            img_rect = rotated_image.get_rect(center=(isx, isy))
+            
+            # Draw the perfectly centered, rotated sprite
+            surf.blit(rotated_image, img_rect.topleft)
+        else:
+            # Fallback: If images failed to load, draw the old geometric body just in case
+            pygame.draw.circle(surf, C_PLAYER, (isx, isy), self.radius)
+            barrel_len = self.radius + 10
+            ex = sx + math.cos(self.facing_angle) * barrel_len
+            ey = sy + math.sin(self.facing_angle) * barrel_len
+            pygame.draw.line(surf, C_PLAYER_BLADE, (isx, isy), (int(ex), int(ey)), 4)
+            pygame.draw.circle(surf, C_WHITE, (isx, isy), 5)
 
-        # Inner dot
-        pygame.draw.circle(surf, C_WHITE, (isx, isy), 5)
-
-        # Active weapon indicator dot (colored by weapon)
-        w_color = self.active_weapon.color
-        pygame.draw.circle(surf, w_color, (isx, isy - self.radius - 6), 4)
-
+        if getattr(self, 'crosshair_img', None):
+            pygame.mouse.set_visible(False) # Hide the normal cursor
+            mx, my = pygame.mouse.get_pos()
+            ch_rect = self.crosshair_img.get_rect(center=(mx, my))
+            surf.blit(self.crosshair_img, ch_rect.topleft)
     # ── HUD helpers ───────────────────────────────────────────────────────────
 
     def draw_hud(self, surf: pygame.Surface):
