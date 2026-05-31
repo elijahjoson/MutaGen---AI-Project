@@ -1,4 +1,5 @@
 """Entry point for Mutagen Arena."""
+# pyrefly: ignore [missing-import]
 import pygame
 import sys
 

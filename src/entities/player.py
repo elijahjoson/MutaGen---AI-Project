@@ -388,90 +388,149 @@ class Player:
         self._draw_loadout_slots(surf)
 
     def _draw_hp_bar(self, surf):
-        x, y, w, h = 20, SCREEN_H - 70, 240, 18
+        from src.ui.ui_helpers import draw_pill_bar, draw_panel, draw_scanlines, lerp_color
+        from src.ui import font_manager as fm
+
+        x, y, w, h = 20, SCREEN_H - 74, 260, 18
         ratio = self.hp / self.max_hp if self.max_hp > 0 else 0
 
-        color = (C_HP_FG if ratio > 0.5 else
-                 C_WARN  if ratio > 0.25 else C_DANGER)
+        # Panel behind HP bar
+        panel_rect = pygame.Rect(x - 8, y - 22, w + 16, h + 34)
+        draw_panel(surf, panel_rect,
+                   border_color=(60, 30, 30) if ratio > 0.25 else (120, 40, 40),
+                   bg_color=(6, 8, 14, 210),
+                   border_radius=6)
+        draw_scanlines(surf, panel_rect, alpha=6, spacing=4)
 
-        _draw_bar(surf, x, y, w, h, ratio, C_HP_BG, color)
+        # Color transitions based on HP ratio
+        if ratio > 0.5:
+            fg = C_HP_FG
+            glow = None
+        elif ratio > 0.25:
+            fg = C_WARN
+            glow = None
+        else:
+            # Critical — pulsing glow
+            pulse = 0.6 + 0.4 * math.sin(self._bob_timer * 6.0)
+            fg = lerp_color(C_DANGER, (255, 100, 100), pulse)
+            glow = (255, 60, 60)
 
-        try:
-            font = pygame.font.SysFont("Courier New", 15, bold=True)
-            lbl  = font.render(f"HP  {int(self.hp)}/{int(self.max_hp)}",
-                               True, C_WHITE)
-            surf.blit(lbl, (x, y - 18))
-        except Exception:
-            pass
+        draw_pill_bar(surf, x, y, w, h, ratio, fg,
+                      bg_color=C_HP_BG, glow_color=glow,
+                      border_color=(80, 35, 35))
+
+        # Label
+        hp_font = fm.hud()
+        hp_label = hp_font.render(
+            f"HP  {int(self.hp)}/{int(self.max_hp)}", True,
+            (255, 200, 200) if ratio > 0.25 else (255, 130, 130)
+        )
+        surf.blit(hp_label, (x + 2, y - 19))
+
+        # Cross icon
+        cx_icon = x + w - 12
+        cy_icon = y - 12
+        icon_color = fg[:3] if ratio > 0.25 else (255, 80, 80)
+        pygame.draw.line(surf, icon_color, (cx_icon - 4, cy_icon), (cx_icon + 4, cy_icon), 2)
+        pygame.draw.line(surf, icon_color, (cx_icon, cy_icon - 4), (cx_icon, cy_icon + 4), 2)
 
     def _draw_stamina_bar(self, surf):
-        x, y, w, h = 20, SCREEN_H - 38, 240, 12
+        from src.ui.ui_helpers import draw_pill_bar, lerp_color
+        from src.ui import font_manager as fm
+
+        x, y, w, h = 20, SCREEN_H - 40, 260, 12
         ratio = self.stamina / self.max_stamina if self.max_stamina > 0 else 0
 
-        _draw_bar(surf, x, y, w, h, ratio, C_STAMINA_BG, C_STAMINA_FG)
+        # Determine state
+        can_dash = self.stamina >= PLAYER_DASH_COST
+        regenerating = ratio < 1.0 and not self._dashing
 
-        try:
-            font = pygame.font.SysFont("Courier New", 14)
-            lbl  = font.render(f"STAMINA  {int(self.stamina)}", True,
-                               (100, 180, 255))
-            surf.blit(lbl, (x, y - 17))
-        except Exception:
-            pass
+        # Bar color — brighter when full, flickers when below dash cost
+        if not can_dash:
+            pulse = 0.5 + 0.5 * math.sin(self._bob_timer * 8.0)
+            fg = lerp_color((30, 80, 160), (60, 160, 255), pulse)
+        elif regenerating:
+            fg = (50, 140, 240)
+        else:
+            fg = C_STAMINA_FG
 
-        # Dash cost indicator
+        glow = (60, 160, 255) if regenerating and ratio < 0.3 else None
+
+        draw_pill_bar(surf, x, y, w, h, ratio, fg,
+                      bg_color=C_STAMINA_BG, glow_color=glow,
+                      border_color=(30, 50, 80))
+
+        # Label
+        stam_font = fm.small()
+        stam_color = (100, 180, 255) if can_dash else (80, 100, 140)
+        stam_label = stam_font.render(
+            f"STAMINA  {int(self.stamina)}", True, stam_color
+        )
+        surf.blit(stam_label, (x + 2, y - 16))
+
+        # Dash cost marker (animated tick)
         cost_ratio = PLAYER_DASH_COST / self.max_stamina
         cx = int(x + cost_ratio * w)
-        pygame.draw.line(surf, C_WARN, (cx, y - 2), (cx, y + h + 2), 2)
+        marker_color = C_WARN if can_dash else (80, 60, 40)
+        pygame.draw.line(surf, marker_color, (cx, y - 2), (cx, y + h + 2), 2)
+        # Small "DASH" label at marker
+        dash_label = fm.tiny().render("DASH", True, (120, 100, 60))
+        surf.blit(dash_label, (cx + 4, y - 2))
 
     def _draw_loadout_slots(self, surf):
         """Draw the 2 weapon slots in the bottom-right area."""
-        slot_w, slot_h = 110, 36
-        gap            = 6
-        start_x        = SCREEN_W - (slot_w * 2 + gap) - 20
-        y              = SCREEN_H - slot_h - 16
+        from src.ui.ui_helpers import draw_panel, draw_pill_bar, brighten
+        from src.ui import font_manager as fm
 
-        try:
-            font_sm = pygame.font.SysFont("Courier New", 13)
-            font_md = pygame.font.SysFont("Courier New", 15, bold=True)
-        except Exception:
-            font_sm = font_md = pygame.font.Font(None, 16)
+        slot_w, slot_h = 140, 48
+        gap            = 8
+        start_x        = SCREEN_W - (slot_w * len(self.loadout) + gap * (len(self.loadout) - 1)) - 20
+        y              = SCREEN_H - slot_h - 14
+
+        font_sm = fm.tiny()
+        font_md = fm.hud()
 
         for i, weapon in enumerate(self.loadout):
             x       = start_x + i * (slot_w + gap)
             active  = (i == self.active_weapon_idx)
-            bg      = (20, 50, 30, 220) if active else (10, 18, 30, 180)
 
-            # Panel
-            s = pygame.Surface((slot_w, slot_h), pygame.SRCALPHA)
-            s.fill(bg)
-            surf.blit(s, (x, y))
-            border = weapon.color if active else C_GRAY
-            pygame.draw.rect(surf, border, (x, y, slot_w, slot_h), 2)
+            # Panel styling
+            if active:
+                bg = (14, 40, 28, 230)
+                border = weapon.color
+                bw = 2
+            else:
+                bg = (8, 14, 24, 180)
+                border = (50, 60, 70)
+                bw = 1
+
+            slot_rect = pygame.Rect(x, y, slot_w, slot_h)
+            draw_panel(surf, slot_rect, border_color=border,
+                       bg_color=bg, border_width=bw, border_radius=6)
+
+            # Active glow
+            if active:
+                glow_surf = pygame.Surface((slot_w + 8, slot_h + 8), pygame.SRCALPHA)
+                pygame.draw.rect(glow_surf, (*weapon.color[:3], 20),
+                                 pygame.Rect(0, 0, slot_w + 8, slot_h + 8),
+                                 border_radius=8)
+                surf.blit(glow_surf, (x - 4, y - 4))
 
             # Weapon name
-            name_lbl = font_md.render(weapon.name[:14], True,
-                                      weapon.color if active else C_GRAY)
-            surf.blit(name_lbl, (x + 6, y + 4))
+            name_color = weapon.color if active else C_GRAY
+            name_lbl = font_md.render(weapon.name[:14], True, name_color)
+            surf.blit(name_lbl, (x + 8, y + 4))
 
             # Cooldown bar inside slot
             cd = 1.0 - weapon.cooldown_ratio
-            bar_y = y + slot_h - 8
-            pygame.draw.rect(surf, C_GRAY, (x+4, bar_y, slot_w-8, 5))
-            pygame.draw.rect(surf, weapon.color,
-                             (x+4, bar_y, int((slot_w-8) * cd), 5))
+            bar_y = y + slot_h - 10
+            bar_w = slot_w - 16
+            cd_fg = weapon.color if active else (80, 90, 100)
+            draw_pill_bar(surf, x + 8, bar_y, bar_w, 5,
+                          cd, cd_fg, bg_color=(25, 30, 40),
+                          border_color=(40, 45, 55))
 
             # Key hint
-            hint = font_sm.render(f"[{'Q/TAB' if i==0 else '  2  '}]",
-                                  True, C_GRAY)
-            surf.blit(hint, (x + 6, y + 18))
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _draw_bar(surf, x, y, w, h, ratio, bg_color, fg_color):
-    panel = pygame.Surface((w + 4, h + 4), pygame.SRCALPHA)
-    panel.fill((0, 0, 0, 140))
-    surf.blit(panel, (x - 2, y - 2))
-    pygame.draw.rect(surf, bg_color, (x, y, w, h))
-    pygame.draw.rect(surf, fg_color, (x, y, max(0, int(w * ratio)), h))
-    pygame.draw.rect(surf, (80, 80, 100), (x, y, w, h), 1)
+            key_text = "Q" if i == 0 else "2"
+            hint = font_sm.render(f"[{key_text}]", True, (70, 80, 100))
+            surf.blit(hint, (x + slot_w - hint.get_width() - 6, y + 5))
