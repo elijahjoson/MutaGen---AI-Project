@@ -21,8 +21,8 @@ GENE_LABEL: dict[str, str] = {
     "hp":           "HP",
     "speed":        "Speed",
     "damage":       "Damage",
-    "attack_rate":  "Attack cooldown",
-    "resist_close": "Resistance",
+    "attack_cd":    "Attack cooldown",
+    "resistance":   "Resistance",
 }
 
 
