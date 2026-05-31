@@ -5,13 +5,9 @@ The arena (2560×1440) is larger than the screen (1280×720).
 The camera follows the player and all entities draw using world coords
 converted to screen coords via camera.world_to_screen().
 
-TEAMMATES: import Camera from here and pass the camera instance into
-every entity's draw() call, and use camera.screen_to_world(mouse_pos)
-to convert mouse input to world space.
 """
 
 from src.core.constants import SCREEN_W, SCREEN_H, ARENA_W, ARENA_H
-
 
 class Camera:
     def __init__(self):

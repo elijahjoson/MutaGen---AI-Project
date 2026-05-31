@@ -2,12 +2,6 @@
 constants.py - Central config for Mutagen Arena.
 Values pulled directly from the project spec sheet.
 
-Section ownership (for teammates):
-  Screen / Arena / Colors     → shared
-  PLAYER_* / WEAPONS          → Joson (Elijah)
-  ARCHETYPES / MUTATION / CAPS→ Tabuena + Centeno
-  WAVE_* / PURGE_*            → Tabuena
-  GA_* / SA_*                 → Centeno
 """
 
 # ── Screen ────────────────────────────────────────────────────────────────────
@@ -59,7 +53,7 @@ C_WARN         = (255, 160,  35)
 C_DANGER       = (255,  55,  55)
 C_HUD_PANEL    = (8,   12,  24, 200)
 
-# ── Player config  (Joson) ────────────────────────────────────────────────────
+# ── Player config  ────────────────────────────────────────────────────
 PLAYER_HP              = 150
 PLAYER_SPEED           = 5          # game units → * SPEED_SCALE px/s
 PLAYER_RADIUS          = 18
@@ -73,15 +67,15 @@ PLAYER_DASH_SPEED_MULT = 2.0
 PLAYER_DASH_DURATION   = 0.25       # seconds
 PLAYER_MAX_LOADOUT     = 2          # weapons equipped at once
 
-# ── Weapon configs  (Joson) ───────────────────────────────────────────────────
+# ── Weapon configs ───────────────────────────────────────────────────
 WEAPONS = {
     "Pulse Rifle": {
         "damage":            25,
-        "range":             400,    # pixels
+        "range":             700,    # pixels
         "cooldown":          0.5,    # seconds
         "stamina_cost":      0,
         "projectile_speed":  15,     # game units → * SPEED_SCALE px/s
-        "projectile_lifespan": 1.5,  # seconds (backup cap)
+        "projectile_lifespan": 3,  # seconds (backup cap)
         "type":              "ranged",
         "proj_radius":       6,
         "color":             (255, 240, 80),
@@ -89,7 +83,7 @@ WEAPONS = {
     },
     "Shock Blade": {
         "damage":            50,
-        "range":             60,     # pixels, melee hitbox radius
+        "range":             100,     # pixels, melee hitbox radius
         "cooldown":          1.0,
         "stamina_cost":      10,
         "type":              "melee",
@@ -99,23 +93,23 @@ WEAPONS = {
     },
     "Arc Launcher": {
         "damage":            80,
-        "range":             350,    # pixels
+        "range":             500,    # pixels
         "cooldown":          2.0,
         "stamina_cost":      20,
         "projectile_speed":  10,     # game units → * SPEED_SCALE px/s
-        "projectile_lifespan": 2.0,
+        "projectile_lifespan": 4,
         "type":              "ranged",
         "proj_radius":       12,
         "color":             (80, 200, 255),
         "description":       "Slow, massive damage. High stamina drain.",
     },
     "Stasis Trap": {
-        "damage":            15,
-        "range":             200,    # max placement distance from player
+        "damage":            100,
+        "range":             300,    # max placement distance from player
         "cooldown":          3.0,
         "stamina_cost":      15,
         "type":              "utility",
-        "trap_radius":       35,     # trigger radius on ground
+        "trap_radius":       75,     # trigger radius on ground
         "color":             (100, 255, 160),
         "description":       "Place a trap. Stasis + damage on trigger.",
     },
@@ -123,7 +117,7 @@ WEAPONS = {
 
 WEAPON_NAMES = list(WEAPONS.keys())   # consistent ordering
 
-# ── Enemy configs  (Tabuena / Centeno) ────────────────────────────────────────
+# ── Enemy configs ────────────────────────────────────────
 ARCHETYPES = {
     "Tank": {
         "hp": 300, "speed": 2, "damage": 10,
@@ -162,14 +156,14 @@ STAT_CAPS = {
     "attack_cd_min": 0.2, "resistance": 0.9,
 }
 
-# ── Wave settings  (Tabuena) ──────────────────────────────────────────────────
+# ── Wave settings  ──────────────────────────────────────────────────
 STARTING_WAVE       = 1
 ENEMIES_PER_WAVE    = 30
 BOSS_WAVE_INTERVAL  = 10
 PURGE_DURATION      = 300     # 5 minutes in seconds
 MIN_SPAWN_DISTANCE  = 400     # pixels from player
 
-# ── GA settings  (Centeno) ────────────────────────────────────────────────────
+# ── GA settings  ────────────────────────────────────────────────────
 GA_TOURNAMENT_SIZE    = 3
 GA_CROSSOVER_RATE     = 0.8
 GA_POPULATION_SIZE    = 30
@@ -177,12 +171,15 @@ GA_BASE_MUTATION_RATE = 0.05
 GA_MAX_MUTATION_RATE  = 0.30
 GA_W1                 = 0.6   # weight: survival time
 GA_W2                 = 0.4   # weight: damage dealt
+GA_BASE_SIGMA                    = 0.15
+LEDGER_STABLE_THRESHOLD_PCT      = 5.0
+LEDGER_MAX_ENTRIES_PER_ARCHETYPE = 3
 
-# ── SA settings  (Centeno) ────────────────────────────────────────────────────
+# ── SA settings  ────────────────────────────────────────────────────
 SA_MAX_TEMPERATURE = 1.0
 SA_COOLING_RATE    = 0.95
 
-# ── Upgrades (Tabuena — upgrade screen) ───────────────────────────────────────
+# ── Upgrades  ───────────────────────────────────────
 UPGRADES = [
     {"name": "Adrenaline",   "desc": "+25% movement speed",     "stat": "speed",       "value": 0.25},
     {"name": "Iron Shell",   "desc": "+40 max HP",              "stat": "max_hp",      "value": 40},
