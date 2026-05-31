@@ -64,7 +64,7 @@ class LoadoutScreen:
     """
 
     CARD_W = 290
-    CARD_H = 400
+    CARD_H = 360
     GAP    = 12
 
     def __init__(self, screen: pygame.Surface, clock: pygame.time.Clock):
@@ -83,7 +83,7 @@ class LoadoutScreen:
 
         # Confirm button rect
         self._btn_rect = pygame.Rect(
-            SCREEN_W // 2 - 160, SCREEN_H - 90, 320, 52
+            SCREEN_W // 2 - 160, SCREEN_H - 130, 320, 44
         )
 
         # Particles
@@ -408,7 +408,7 @@ class LoadoutScreen:
 
     def _draw_selection_summary(self, surf):
         """Show the 2 selected weapon names side-by-side above the button."""
-        y   = self._btn_rect.top - 44
+        y   = self._btn_rect.top - 50
         cx  = SCREEN_W // 2
         slot_w = 240
         gap = 30
@@ -484,7 +484,7 @@ class LoadoutScreen:
     def _draw_instructions(self, surf):
         text = "Keys [1-4] toggle weapons    ENTER to confirm    ESC to quit"
         s = fm.tiny().render(text, True, (50, 60, 75))
-        surf.blit(s, (SCREEN_W // 2 - s.get_width() // 2, SCREEN_H - 22))
+        surf.blit(s, (SCREEN_W // 2 - s.get_width() // 2, SCREEN_H - 28))
 
 
 # ── Text wrap helper ──────────────────────────────────────────────────────────
