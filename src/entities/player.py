@@ -1,6 +1,5 @@
 """
 player.py - Player entity for Mutagen Arena.
-Owner: Joson (Elijah)
 
 Responsibilities:
   - Directional movement (WASD) with arena collision
@@ -10,17 +9,6 @@ Responsibilities:
   - Stamina regen + consumption
   - HP regen at wave end
 
-TEAMMATE INTERFACE:
-  player.x, player.y          → world position
-  player.hp / player.max_hp   → health
-  player.stamina              → current stamina
-  player.alive                → False when HP hits 0
-  player.loadout              → list of Weapon objects (max 2)
-  player.active_weapon        → currently equipped Weapon
-  player.take_damage(amount)  → apply damage (respects invincibility)
-  player.regen_hp_wave()      → call at end of each wave (Tabuena)
-  player.update(dt, mouse_world_pos, events)
-  player.draw(surf, camera)
 """
 
 import pygame
@@ -256,15 +244,11 @@ class Player:
             return
         self.hp = max(0.0, self.hp - amount)
         self.total_damage_taken += amount
-        self._inv_timer = PLAYER_INV_FRAMES
+        self._inv_timer = 1.0
         if self.hp <= 0:
             self.alive = False
 
     def regen_hp_wave(self):
-        """
-        Restore HP at the end of a wave.
-        Call this from wave_manager when the wave is cleared (Tabuena).
-        """
         self.hp = min(self.max_hp, self.hp + PLAYER_HP_REGEN_WAVE)
 
     # ── Upgrades ─────────────────────────────────────────────────────────────

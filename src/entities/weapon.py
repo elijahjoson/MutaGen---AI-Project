@@ -1,6 +1,5 @@
 """
 weapon.py - Weapon system for Mutagen Arena.
-Owner: Joson (Elijah)
 
 Contains:
   Projectile       — ranged bullet (Pulse Rifle, Arc Launcher)
@@ -13,16 +12,6 @@ Contains:
   StasisTrap_W     — places a stasis trap on the ground
   create_weapon()  — factory function
 
-TEAMMATE INTERFACE (wave_manager.py / Tabuena):
-  After player fires, iterate over all weapons in player.loadout:
-    for weapon in player.loadout:
-        for proj  in weapon.projectiles:    # Projectile objects
-        for swing in weapon.swing_hitboxes: # SwingHitbox objects
-        for trap  in weapon.traps:          # Trap objects
-
-  Each threat object has: .x .y .radius .damage .alive
-  Set  .alive = False  to consume/destroy the threat after a hit.
-  For Trap: also call  trap.trigger()  to play the trigger animation.
 """
 
 import pygame
