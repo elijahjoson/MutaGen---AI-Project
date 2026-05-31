@@ -1,18 +1,9 @@
 """
 loadout_screen.py - Weapon loadout selection screen.
-Owner: Joson (Elijah)
 
 Shows all 4 available weapons. Player selects up to PLAYER_MAX_LOADOUT (2).
 Returns the selected weapon names to the game controller.
 
-USAGE (in game.py / main.py):
-    from src.ui.loadout_screen import LoadoutScreen
-
-    screen_result = LoadoutScreen(screen, clock).run()
-    if screen_result is None:
-        # player quit
-    else:
-        player = Player(screen_result)   # list of 2 weapon name strings
 """
 
 import pygame
@@ -26,7 +17,7 @@ from src.core.constants import (
 )
 
 
-# ── Colour helpers ────────────────────────────────────────────────────────────
+# ── Color helpers ────────────────────────────────────────────────────────────
 
 def _sysf(size, bold=False):
     try:
