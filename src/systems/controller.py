@@ -67,7 +67,7 @@ def _theoretical_max_fitness() -> float:
     Highest possible fitness an enemy could plausibly achieve in 30 seconds:
       W_SURVIVAL * 30  +  W_DAMAGE * PLAYER_MAX_HP
     """
-    return W_SURVIVAL * 120.0 + W_DAMAGE * PLAYER_MAX_HP
+    return W_SURVIVAL * 120.0 + W_DAMAGE * 1000.0
 
 
 class GameController:
@@ -229,6 +229,7 @@ class GameController:
             # Wave-end transition
             if self.arena.wave_complete:
                 # Sentience check
+                log_dict = self.lethality_log.all()
                 fits = [
                     fitness(self.lethality_log.get(c.id))
                     for c in self.previous_population
