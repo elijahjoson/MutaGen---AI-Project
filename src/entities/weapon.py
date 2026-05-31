@@ -17,12 +17,12 @@ Contains:
 import pygame
 import math
 import random
+from src.core.assets import AssetManager
 from src.core.constants import (
     SPEED_SCALE, ARENA_W, ARENA_H,
     C_BULLET_PULSE, C_BULLET_ARC, C_SWING, C_TRAP, C_ENEMY_BULLET,
     WEAPONS,
 )
-
 
 # ── Projectile ────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,7 @@ class Projectile:
         color: tuple,
         max_range: float,
         lifespan: float,
+        image_path: str = None,
     ):
         self.x, self.y        = x, y
         self.dx, self.dy      = dx, dy
@@ -50,7 +51,7 @@ class Projectile:
         self.color            = color
         self.max_range        = max_range
         self.lifespan         = lifespan
-
+        self.image = AssetManager.get_image(image_path, scale=1.0) if image_path else None
         self.alive            = True
         self._age             = 0.0
         self._dist_traveled   = 0.0
@@ -75,17 +76,16 @@ class Projectile:
             self.alive = False
 
     def draw(self, surf: pygame.Surface, camera):
-        # Trail
-        for i, (tx, ty) in enumerate(self._trail):
-            sx, sy = camera.world_to_screen(tx, ty)
-            alpha  = int(160 * (i / max(len(self._trail), 1)))
-            tr     = max(1, self.radius - (len(self._trail) - i))
-            s = pygame.Surface((tr*2+2, tr*2+2), pygame.SRCALPHA)
-            pygame.draw.circle(s, (*self.color[:3], alpha), (tr+1, tr+1), tr)
-            surf.blit(s, (int(sx) - tr - 1, int(sy) - tr - 1))
-        # Body
         sx, sy = camera.world_to_screen(self.x, self.y)
-        pygame.draw.circle(surf, self.color, (int(sx), int(sy)), self.radius)
+        if self.image:
+            # Rotate image to face direction of travel
+            angle = math.degrees(math.atan2(self.dy, self.dx))
+            rotated = pygame.transform.rotate(self.image, -angle - 90)
+            rect = rotated.get_rect(center=(int(sx), int(sy)))
+            surf.blit(rotated, rect.topleft)
+        else:
+            # Fallback for if image fails to load
+            pygame.draw.circle(surf, self.color, (int(sx), int(sy)), self.radius)
 
 
 # ── SwingHitbox ───────────────────────────────────────────────────────────────
@@ -113,6 +113,9 @@ class SwingHitbox:
         self._timer       = duration
         self.alive        = True
         self.already_hit: set = set()
+        self.image = AssetManager.get_image("assets/sprites/weapons/slash_fx.png", scale=4)
+        
+        self.total_frames = 10
 
     def update(self, dt: float):
         self._timer -= dt
@@ -126,21 +129,56 @@ class SwingHitbox:
 
     def draw(self, surf: pygame.Surface, camera):
         sx, sy = camera.world_to_screen(self.x, self.y)
-        alpha  = int(180 * (1.0 - self.progress))
-        # Draw a semi-transparent arc / circle
-        s = pygame.Surface((int(self.radius)*2+4, int(self.radius)*2+4),
-                           pygame.SRCALPHA)
+        # 1. Sprite Sheet Animation (Centered 360 AOE)
+        if self.image:
+            # Figure out which frame we are currently on (0 through 9)
+            current_frame = int(self.progress * self.total_frames)
+            current_frame = min(current_frame, self.total_frames - 1)
+
+            # Calculate how wide ONE frame is
+            frame_w = self.image.get_width() // self.total_frames
+            frame_h = self.image.get_height()
+            
+            # Create a blank, clear canvas just for this one frame
+            frame_surf = pygame.Surface((frame_w, frame_h), pygame.SRCALPHA)
+            
+            # Cut out exactly the frame we want and paste it on our blank canvas
+            frame_surf.blit(self.image, (0, 0), (current_frame * frame_w, 0, frame_w, frame_h))
+
+            # Rotate the frame based on where the mouse is aiming
+            angle_deg = math.degrees(self.angle)
+            rotated = pygame.transform.rotate(frame_surf, -angle_deg) 
+
+            # Draw it exactly at the player's center (sx, sy)
+            rect = rotated.get_rect(center=(int(sx), int(sy)))
+            surf.blit(rotated, rect.topleft)
+            return
+
+        # 2. FALLBACK: Original Geometric Drawing
+        alpha = int(180 * (1.0 - self.progress))
+        s = pygame.Surface((int(self.radius)*2+4, int(self.radius)*2+4), pygame.SRCALPHA)
         pygame.draw.circle(
             s, (*C_SWING[:3], alpha),
             (int(self.radius)+2, int(self.radius)+2),
             int(self.radius)
         )
-        surf.blit(s, (int(sx) - int(self.radius) - 2,
-                      int(sy) - int(self.radius) - 2))
+        surf.blit(s, (int(sx) - int(self.radius) - 2, int(sy) - int(self.radius) - 2))
+        pygame.draw.circle(surf, C_SWING, (int(sx), int(sy)), int(self.radius), 2)
+        #alpha  = int(180 * (1.0 - self.progress))
+        # Draw a semi-transparent arc / circle
+        #s = pygame.Surface((int(self.radius)*2+4, int(self.radius)*2+4),
+        #                   pygame.SRCALPHA)
+        #pygame.draw.circle(
+         #   s, (*C_SWING[:3], alpha),
+        #    (int(self.radius)+2, int(self.radius)+2),
+        #    int(self.radius)
+        #)
+        #surf.blit(s, (int(sx) - int(self.radius) - 2,
+        #              int(sy) - int(self.radius) - 2))
         # Outline
-        pygame.draw.circle(surf, C_SWING,
-                           (int(sx), int(sy)), int(self.radius), 2)
-
+        #pygame.draw.circle(surf, C_SWING,
+        #                   (int(sx), int(sy)), int(self.radius), 2)
+        pygame.draw.circle(surf, (255, 0, 0), (int(sx), int(sy)), int(self.radius), 1)
 
 # ── Trap ──────────────────────────────────────────────────────────────────────
 
@@ -155,7 +193,7 @@ class Trap:
     Stasis effect suggestion: set enemy._stasis_timer = 2.0 on the enemy
     and have the enemy reduce its speed while _stasis_timer > 0.
     """
-    TRIGGER_VISUAL_DURATION = 0.6   # seconds to show explosion before removal
+    TRIGGER_VISUAL_DURATION = 0.4   # seconds to show explosion before removal
 
     def __init__(self, x: float, y: float, damage: int, radius: float):
         self.x, self.y    = x, y
@@ -165,6 +203,8 @@ class Trap:
         self.triggered    = False
         self._vis_timer   = 0.0
         self._idle_pulse  = 0.0   # animation timer
+        self.idle_img = AssetManager.get_image("assets/sprites/weapons/trap_idle.png", 0.75)
+        self.active_img = AssetManager.get_image("assets/sprites/weapons/trap_active.png", 0.8)
 
     def trigger(self):
         """Call when an enemy steps on the trap."""
@@ -181,6 +221,12 @@ class Trap:
 
     def draw(self, surf: pygame.Surface, camera):
         sx, sy = camera.world_to_screen(self.x, self.y)
+
+        img = self.active_img if self.triggered else self.idle_img
+        if img:
+            rect = img.get_rect(center=(int(sx), int(sy)))
+            surf.blit(img, rect.topleft)
+            return
 
         if self.triggered:
             # Explosion ring
@@ -304,14 +350,22 @@ class PulseRifle(Weapon):
 
     def _fire(self, px, py, tx, ty):
         dx, dy = _normalize(tx - px, ty - py)
+        angle = math.atan2(dy, dx)
+        forward_offset = 30  # Distance forward to the gun tip
+        right_offset = 15    # Distance to the right arm
+        
+        barrel_x = px + math.cos(angle) * forward_offset + math.cos(angle + math.pi / 2) * right_offset
+        barrel_y = py + math.sin(angle) * forward_offset + math.sin(angle + math.pi / 2) * right_offset
+        
         self.projectiles.append(Projectile(
-            px, py, dx, dy,
+            barrel_x, barrel_y, dx, dy,
             speed_units = self._proj_speed,
             damage      = self.damage,
             radius      = self._proj_radius,
             color       = self.color,
             max_range   = self.range,
             lifespan    = self._proj_lifespan,
+            image_path  = "assets/sprites/weapons/bullet_pulse.png"
         ))
 
     def apply_upgrade(self, stat, value):
@@ -359,18 +413,26 @@ class ArcLauncher(Weapon):
 
     def _fire(self, px, py, tx, ty):
         dx, dy = _normalize(tx - px, ty - py)
+        angle = math.atan2(dy, dx)
+        forward_offset = 30  
+        right_offset = 15    
+        
+        barrel_x = px + math.cos(angle) * forward_offset + math.cos(angle + math.pi / 2) * right_offset
+        barrel_y = py + math.sin(angle) * forward_offset + math.sin(angle + math.pi / 2) * right_offset
+        
         # Slight spread for visual feel
         spread = random.uniform(-0.04, 0.04)
         dx2    = dx * math.cos(spread) - dy * math.sin(spread)
         dy2    = dx * math.sin(spread) + dy * math.cos(spread)
         self.projectiles.append(Projectile(
-            px, py, dx2, dy2,
+            barrel_x, barrel_y, dx2, dy2,
             speed_units = self._proj_speed,
             damage      = self.damage,
             radius      = self._proj_radius,
             color       = self.color,
             max_range   = self.range,
             lifespan    = self._proj_lifespan,
+            image_path  = "assets/sprites/weapons/bullet_arc.png"
         ))
 
     def apply_upgrade(self, stat, value):
@@ -386,7 +448,7 @@ class StasisTrap_W(Weapon):
     Places a trap at the cursor position (within `range` pixels of player).
     The trap stays until triggered by an enemy walking over it.
 
-    TEAMMATE (Tabuena — wave_manager.py):
+    TEAMMATE:
       Each frame, for each trap in weapon.traps:
         for each alive enemy:
           dist = distance(enemy, trap)

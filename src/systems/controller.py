@@ -77,6 +77,7 @@ class GameController:
         self.wave_n    = 0
         self.upload_pct = 0.0
         self.sa_temperature = 1.0
+        self.death_delay = 0.0
         self.previous_population: list[Chromosome] = []
         self.lethality_log = LethalityLog()
         self.registry      = GenotypeRegistry()
@@ -113,6 +114,7 @@ class GameController:
         """
         self.wave_n     = 1
         self.upload_pct = 0.0
+        self.death_delay = 0.0
         self.lethality_log.clear()
 
         self.player = Player(loadout_names=loadout_names)
@@ -126,6 +128,7 @@ class GameController:
 
     def _enter_intermission(self) -> None:
         """COMBAT → INTERMISSION — run evolve and compute ledger."""
+        pygame.mouse.set_visible(True)
         old_pop = self.previous_population
         T = temperature(self.player.hp, self.player.max_hp)
         self.sa_temperature = T
@@ -157,14 +160,17 @@ class GameController:
         self.state = State.COMBAT
 
     def _go_victory(self) -> None:
+        pygame.mouse.set_visible(True)
         self.state = State.VICTORY
 
     def _go_defeat(self) -> None:
+        pygame.mouse.set_visible(True)
         if self.arena is not None:
             self.arena.finalize_survivors()
         self.state = State.DEFEAT
 
     def _reset_to_title(self) -> None:
+        pygame.mouse.set_visible(True)
         self.state      = State.TITLE
         self.wave_n     = 0
         self.upload_pct = 0.0
@@ -201,33 +207,35 @@ class GameController:
             else: self._start_run(result)
 
         elif self.state is State.COMBAT:
-            mouse_screen = pygame.mouse.get_pos()
-            mouse_world  = self.camera.screen_to_world(*mouse_screen)
-            self.player.update(dt, mouse_world, events)
+            if self.player.alive:
+                mouse_screen = pygame.mouse.get_pos()
+                mouse_world  = self.camera.screen_to_world(*mouse_screen)
+                self.player.update(dt, mouse_world, events)
+
+                # Upload progress (real-time)
+                self.upload_pct = min(
+                    100.0,
+                    self.upload_pct + (100.0 / UPLOAD_DURATION_SEC) * dt
+                )
+            else:
+                # --- NEW DEATH DELAY ---
+                # Player is dead. Count up to 2.0 seconds before showing defeat screen.
+                self.death_delay += dt
+                if self.death_delay >= 2.0:
+                    self._go_defeat()
+                    return
 
             # Camera follows player
             self.camera.follow(self.player.x, self.player.y)
 
             self.arena.update(dt)
 
-            # Upload progress (real-time)
-            self.upload_pct = min(
-                100.0,
-                self.upload_pct + (100.0 / UPLOAD_DURATION_SEC) * dt
-            )
-
-            # Defeat by HP
-            if not self.player.alive:
-                self._go_defeat()
-                return
-
-            # Victory: upload full AND wave clear
-            if self.upload_pct >= 100.0 and self.arena.wave_complete:
+            if self.player.alive and self.upload_pct >= 100.0 and self.arena.wave_complete:
                 self._go_victory()
                 return
 
-            # Wave-end transition
-            if self.arena.wave_complete:
+            # Wave-end transition (Added 'self.player.alive' check)
+            if self.player.alive and self.arena.wave_complete:
                 # Sentience check
                 log_dict = self.lethality_log.all()
                 fits = [
@@ -354,39 +362,3 @@ class GameController:
             screen.blit(surf, (24, y))
             y += 18
 
-
-# ── main.py integration note ──────────────────────────────────────────────────
-"""
-In main.py, the game loop should look roughly like this:
-
-    import pygame
-    from src.systems.controller import GameController, State
-    from src.ui.loadout_screen import LoadoutScreen
-    from src.core.constants import SCREEN_W, SCREEN_H, FPS, TITLE
-
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-    pygame.display.set_caption(TITLE)
-    clock  = pygame.time.Clock()
-
-    controller = GameController()
-
-    while controller.running:
-        dt     = clock.tick(FPS) / 1000.0
-        events = pygame.event.get()
-
-        # Handle loadout screen as a blocking call when state is LOADOUT
-        if controller.state is State.LOADOUT:
-            result = LoadoutScreen(screen, clock).run()
-            if result is None:
-                controller.running = False   # player quit
-            else:
-                controller._start_run(result)
-        else:
-            controller.handle_events(events)
-            controller.update(dt, events)
-            controller.render(screen)
-            pygame.display.flip()
-
-    pygame.quit()
-"""
