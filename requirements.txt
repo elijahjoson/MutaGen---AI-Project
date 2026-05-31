@@ -1,0 +1,4 @@
+pygame-ce==2.5.7
+numpy>=1.26
+pytest>=8.0
+matplotlib>=3.8
