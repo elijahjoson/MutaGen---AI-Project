@@ -41,7 +41,7 @@ class Player:
         self.y: float = ARENA_H / 2
 
         # --- NEW CLEAN ASSET LOADING ---
-        SCALE = 1.5
+        SCALE = 1.25
         self.sprites = {
             "Pulse Rifle": AssetManager.get_image("assets/sprites/player/player_pulse.png", SCALE),
             "Arc Launcher": AssetManager.get_image("assets/sprites/player/player_arc.png", SCALE),

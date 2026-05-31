@@ -157,7 +157,24 @@ class GameController:
     def _start_next_wave(self) -> None:
         self.wave_n += 1
         self.lethality_log.clear()
-        self.arena.begin_wave(self.registry.current())
+
+        # --- BOSS EVERY 10 WAVES ---
+        if self.wave_n % 10 == 0:
+            from collections import Counter
+            current_pop = self.registry.current()
+            
+            # Find the most successful archetype
+            most_common_arch = Counter([c.archetype for c in current_pop]).most_common(1)[0][0]
+            boss_chrom = next(c for c in current_pop if c.archetype == most_common_arch)
+            
+            boss_img_path = self._determine_boss_image(boss_chrom)
+            
+            # Pass the boss data to the arena
+            self.arena.begin_wave(current_pop, is_boss=True, boss_chrom=boss_chrom, boss_img_path=boss_img_path)
+        else:
+            # Normal wave
+            self.arena.begin_wave(self.registry.current())
+
         self.state = State.COMBAT
 
     def _go_victory(self) -> None:
@@ -186,6 +203,21 @@ class GameController:
         self.player     = None
         self.arena      = None
         self._title_time = 0.0
+
+    def _determine_boss_image(self, boss_chromosome: Chromosome) -> str:
+        """Determines the boss sprite based on the archetype."""
+        arch = boss_chromosome.archetype.name.lower()
+        
+        if arch == "tank":
+            return "assets/sprites/enemies/boss_blue.png"
+        elif arch == "striker":
+            return "assets/sprites/enemies/boss_red.png"
+        elif arch == "ranged":
+            return "assets/sprites/enemies/boss_yellow.png"
+        elif arch == "support":
+            return "assets/sprites/enemies/boss_green.png"
+        else:
+            return "assets/sprites/enemies/boss_black.png"
 
     # ── Event handling ─────────────────────────────────────────────────────────
     def handle_events(self, events: list) -> None:

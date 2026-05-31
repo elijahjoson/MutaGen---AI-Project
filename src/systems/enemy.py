@@ -8,7 +8,7 @@ from src.entities.weapon import Projectile
 
 
 class Enemy:
-    def __init__(self, chrom: Chromosome, pos: tuple[float, float]):
+    def __init__(self, chrom: Chromosome, pos: tuple[float, float], is_boss: bool = False, boss_img_path: str = None):
         self.chrom = chrom
         self.x, self.y = pos
         self.hp = float(chrom.hp)
@@ -17,6 +17,8 @@ class Enemy:
         self.survival_sec = 0.0
         self.damage_dealt = 0.0
         self.alive = True
+        self.dying = False
+        self.death_timer = 0.5
 
         cfg = ARCHETYPES[chrom.archetype.value]
         self.color = cfg["color"]
@@ -24,18 +26,66 @@ class Enemy:
         self.attack_range = cfg.get("attack_range", 0)
         self.aoe_range = cfg.get("aoe_range", 0)
 
+        if is_boss:
+            self.hp = float(chrom.hp) * 10.0      # Boss has 10x HP
+            self.max_hp = float(chrom.hp) * 10.0
+            self.chrom.damage *= 2.5              # Boss hits 2.5x harder
+            self.chrom.speed *= 0.8               # Boss moves slightly slower (optional)
+        else:
+            self.hp = float(chrom.hp)
+            self.max_hp = float(chrom.hp)
+
+        # --- NEW: VISUAL ASSET LOADING ---
+        if is_boss and boss_img_path:
+            raw_img = pygame.image.load(boss_img_path).convert_alpha()
+            size = int(self.radius * 6) # Boss is 3x bigger than a normal slime
+        else:
+            arch_name = chrom.archetype.name.lower()
+            if arch_name == "tank":
+                raw_img = pygame.image.load("assets/sprites/enemies/tank.png").convert_alpha()
+            elif arch_name == "striker":
+                raw_img = pygame.image.load("assets/sprites/enemies/striker.png").convert_alpha()
+            elif arch_name == "ranged":
+                raw_img = pygame.image.load("assets/sprites/enemies/ranger.png").convert_alpha()
+            elif arch_name == "support":
+                raw_img = pygame.image.load("assets/sprites/enemies/support.png").convert_alpha()
+            else:
+                raw_img = pygame.Surface((64, 64), pygame.SRCALPHA)
+                raw_img.fill((255, 0, 0))
+
+        # Dynamically scale the slime to perfectly fit your archetype's radius
+        size = int(self.radius * 2)
+        self.image = pygame.transform.smoothscale(raw_img, (size, size))
+        self.rect = self.image.get_rect(center=(self.x, self.y))
+
+        self.hit_timer = 0.0
+        # Pygame trick: Trace the image and create a solid white silhouette perfectly matched to the slime
+        mask = pygame.mask.from_surface(self.image)
+        self.flash_image = mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
+
     def take_damage(self, amount: float):
+        if self.dying:
+            return
         actual_damage = amount * (1.0 - self.chrom.resistance)
         self.hp -= actual_damage
+        self.hit_timer = 0.05
         if self.hp <= 0:
-            self.alive = False
+            self.dying = True
 
     def update(self, dt: float, player, all_enemies: list, enemy_bullets: list) -> None:
         if not self.alive:
             return
+        if self.dying:
+            self.death_timer -= dt
+            if self.death_timer <= 0:
+                self.alive = False # Finally remove it from the game
+            return
 
         self.survival_sec += dt
         self.attack_cd = max(0.0, self.attack_cd - dt)
+
+        if self.hit_timer > 0:
+            self.hit_timer -= dt
 
         if self.chrom.archetype in (Archetype.TANK, Archetype.STRIKER):
             self._steer_towards(player.x, player.y, dt)
@@ -116,11 +166,58 @@ class Enemy:
     def draw(self, screen: pygame.Surface, camera) -> None:
         if not self.alive:
             return
+        
+        # 1. Get the screen coordinates from the camera
         sx, sy = camera.world_to_screen(self.x, self.y)
-        if self.chrom.archetype == Archetype.SUPPORT and self.attack_cd <= 0:
-            pygame.draw.circle(screen, (100, 255, 100),
-                               (int(sx), int(sy)), self.aoe_range, 1)
-        pygame.draw.circle(screen, self.color, (int(sx), int(sy)), self.radius)
+        
+        if self.dying:
+            # Calculate a ratio from 1.0 down to 0.0
+            ratio = max(0, self.death_timer / 0.5)
+            
+            # Shrink the size
+            current_size = int((self.radius * 2) * ratio)
+            
+            if current_size > 0:
+                # Scale the image down and stamp it
+                melt_img = pygame.transform.smoothscale(self.image, (current_size, current_size))
+                
+                # Optional: Make it fade away (become transparent)
+                melt_img.set_alpha(int(255 * ratio))
+                
+                melt_rect = melt_img.get_rect(center=(int(sx), int(sy)))
+                screen.blit(melt_img, melt_rect)
+            
+            return
+
+        # 2. Draw the support aura ring (if applicable) BEFORE the slime so it sits underneath
+        if self.chrom.archetype.name == "SUPPORT" and self.attack_cd <= 0:
+            # math.sin() creates a wave between -1 and 1 based on the clock.
+            pulse = math.sin(pygame.time.get_ticks() * 0.005)
+            # The radius expands and shrinks by 5 pixels smoothly
+            pulsing_radius = self.aoe_range + (pulse * 5)
+            
+            # Draw it with a thickness of 2 so it looks like a real energy ring
+            pygame.draw.circle(screen, (100, 255, 100), (int(sx), int(sy)), int(pulsing_radius), 2)
+
+        # 3. Draw the Slime image!
+        # We create a temporary rect centered on the camera coordinates to stamp the image perfectly
+        img_rect = self.image.get_rect(center=(int(sx), int(sy)))
+        
+        if self.hit_timer > 0:
+            # Stamp the pure white silhouette 
+            screen.blit(self.flash_image, img_rect)
+        else:
+            # Stamp the normal colored slime
+            screen.blit(self.image, img_rect)
+
+        # 4. Draw the health bars on top
+        hp_ratio = max(0, self.hp / self.max_hp)
+        pygame.draw.rect(screen, (255, 0, 0),
+                         (sx - 15, sy - self.radius - 10, 30, 4))
+        pygame.draw.rect(screen, (0, 255, 0),
+                         (sx - 15, sy - self.radius - 10, int(30 * hp_ratio), 4))
+
+        # 4. Draw the health bars on top
         hp_ratio = max(0, self.hp / self.max_hp)
         pygame.draw.rect(screen, (255, 0, 0),
                          (sx - 15, sy - self.radius - 10, 30, 4))

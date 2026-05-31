@@ -122,7 +122,7 @@ ARCHETYPES = {
     "Tank": {
         "hp": 300, "speed": 2, "damage": 10,
         "attack_cd": 1.0, "resistance": 0.4,
-        "radius": 40, "attack_range": 60,
+        "radius": 50, "attack_range": 60,
         "color": C_TANK,
     },
     "Striker": {

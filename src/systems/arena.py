@@ -59,13 +59,25 @@ class Arena:
         except Exception as e:
             print(f"Arena background load failed: {e}")
 
-    def begin_wave(self, chromosomes: list[Chromosome]) -> None:
+    def begin_wave(self, chromosomes: list[Chromosome], is_boss: bool = False, 
+        boss_chrom: Chromosome | None = None, 
+        boss_img_path: str | None = None) -> None:
         self.enemies.clear()
         self.enemy_bullets.clear()
         self.lethality.clear()
         self.spawn_queue = list(chromosomes)
         self.spawn_timer = 0.0
         self.wave_complete = False
+
+        if is_boss and boss_chrom and boss_img_path:
+            # Put the boss directly in the center of the arena while the rest of the wave queues up
+            from src.core.constants import ARENA_W, ARENA_H
+            spawn_x = ARENA_W / 2
+            spawn_y = ARENA_H / 2 
+            
+            # Note: Make sure 'Enemy' is imported at the top of your arena.py file!
+            boss_enemy = Enemy(boss_chrom, (spawn_x, spawn_y), is_boss=True, boss_img_path=boss_img_path)
+            self.enemies.append(boss_enemy)
 
     def get_safe_spawn_point(self, player_x: float, player_y: float) -> tuple[float, float]:
         """Ensures enemies do not spawn directly on top of the player."""
