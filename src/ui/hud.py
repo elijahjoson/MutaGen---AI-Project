@@ -106,8 +106,8 @@ def _draw_purge_bar(screen: pygame.Surface, state: HUDState,
 # ── Wave Panel (top-right) ────────────────────────────────────────────────────
 
 def _draw_wave_panel(screen: pygame.Surface, state: HUDState) -> None:
-    panel_w = 200
-    panel_h = 100
+    panel_w = 220
+    panel_h = 110
     panel_x = SCREEN_W - panel_w - 16
     panel_y = 12
 
@@ -119,39 +119,40 @@ def _draw_wave_panel(screen: pygame.Surface, state: HUDState) -> None:
     draw_scanlines(screen, panel_rect, alpha=6)
 
     # "WAVE" label
-    wave_label = fm.small().render("WAVE", True, (140, 100, 100))
-    screen.blit(wave_label, (panel_x + 12, panel_y + 8))
+    wave_label = fm.tiny().render("WAVE", True, (140, 100, 100))
+    screen.blit(wave_label, (panel_x + 12, panel_y + 10))
 
-    # Wave number — large
+    # Wave number — large, right-aligned
     pulse = 0.8 + 0.2 * math.sin(_time * 1.5)
     wave_color = pulse_color((255, 130, 130), pulse)
     wave_num = fm.header().render(str(state.wave_n), True, wave_color)
     screen.blit(wave_num, (panel_x + panel_w - wave_num.get_width() - 14,
-                           panel_y + 4))
+                           panel_y + 6))
 
     # Divider
-    div_y = panel_y + 38
+    div_y = panel_y + 32
     pygame.draw.line(screen, (40, 35, 45),
                      (panel_x + 8, div_y), (panel_x + panel_w - 8, div_y), 1)
 
     # Enemies remaining
     enemy_color = (200, 200, 200) if state.enemies_remaining > 0 else (100, 200, 120)
-    enemies_surf = fm.hud().render(
+    enemies_surf = fm.tiny().render(
         f"{state.enemies_remaining} ENEMIES", True, enemy_color
     )
-    screen.blit(enemies_surf, (panel_x + 12, div_y + 6))
+    screen.blit(enemies_surf, (panel_x + 12, div_y + 8))
 
     # SA Temperature micro-bar
-    temp_y = div_y + 28
     temp_label = fm.tiny().render("SA TEMP", True, (100, 140, 160))
+    temp_y = div_y + 24
     screen.blit(temp_label, (panel_x + 12, temp_y))
 
-    temp_bar_x = panel_x + 80
-    temp_bar_w = panel_w - 92
+    # Position bar right after label with a gap
+    temp_bar_x = panel_x + 12 + temp_label.get_width() + 8
+    temp_bar_w = panel_w - (temp_label.get_width() + 32)
     temp_ratio = max(0.0, min(1.0, state.sa_temperature))
 
     # Color: blue (cold/low) → red (hot/high)
     temp_color = lerp_color((60, 160, 255), (255, 80, 60), temp_ratio)
-    draw_pill_bar(screen, temp_bar_x, temp_y + 2, temp_bar_w, 10,
+    draw_pill_bar(screen, temp_bar_x, temp_y + 1, temp_bar_w, 8,
                   temp_ratio, temp_color, bg_color=(20, 25, 35),
                   border_color=(40, 50, 60))

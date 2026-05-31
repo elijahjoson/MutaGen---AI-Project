@@ -419,16 +419,16 @@ class Player:
                       bg_color=C_HP_BG, glow_color=glow,
                       border_color=(80, 35, 35))
 
-        # Label
-        hp_font = fm.hud()
+        # Label — ensure it stays within the panel area
+        hp_font = fm.tiny()
         hp_label = hp_font.render(
             f"HP  {int(self.hp)}/{int(self.max_hp)}", True,
             (255, 200, 200) if ratio > 0.25 else (255, 130, 130)
         )
-        surf.blit(hp_label, (x + 2, y - 19))
+        surf.blit(hp_label, (x + 2, y - 18))
 
-        # Cross icon
-        cx_icon = x + w - 12
+        # Cross icon — right side, vertically centered with label
+        cx_icon = x + w - 8
         cy_icon = y - 12
         icon_color = fg[:3] if ratio > 0.25 else (255, 80, 80)
         pygame.draw.line(surf, icon_color, (cx_icon - 4, cy_icon), (cx_icon + 4, cy_icon), 2)
@@ -438,7 +438,7 @@ class Player:
         from src.ui.ui_helpers import draw_pill_bar, lerp_color
         from src.ui import font_manager as fm
 
-        x, y, w, h = 20, SCREEN_H - 40, 260, 12
+        x, y, w, h = 20, SCREEN_H - 34, 260, 10
         ratio = self.stamina / self.max_stamina if self.max_stamina > 0 else 0
 
         # Determine state
@@ -460,35 +460,32 @@ class Player:
                       bg_color=C_STAMINA_BG, glow_color=glow,
                       border_color=(30, 50, 80))
 
-        # Label
-        stam_font = fm.small()
+        # Label — left of bar, above it
+        stam_font = fm.tiny()
         stam_color = (100, 180, 255) if can_dash else (80, 100, 140)
         stam_label = stam_font.render(
-            f"STAMINA  {int(self.stamina)}", True, stam_color
+            f"STAMINA {int(self.stamina)}", True, stam_color
         )
-        surf.blit(stam_label, (x + 2, y - 16))
+        surf.blit(stam_label, (x + 2, y - 12))
 
-        # Dash cost marker (animated tick)
+        # Dash cost marker (small tick on the bar)
         cost_ratio = PLAYER_DASH_COST / self.max_stamina
         cx = int(x + cost_ratio * w)
         marker_color = C_WARN if can_dash else (80, 60, 40)
-        pygame.draw.line(surf, marker_color, (cx, y - 2), (cx, y + h + 2), 2)
-        # Small "DASH" label at marker
-        dash_label = fm.tiny().render("DASH", True, (120, 100, 60))
-        surf.blit(dash_label, (cx + 4, y - 2))
+        pygame.draw.line(surf, marker_color, (cx, y - 1), (cx, y + h + 1), 2)
 
     def _draw_loadout_slots(self, surf):
         """Draw the 2 weapon slots in the bottom-right area."""
         from src.ui.ui_helpers import draw_panel, draw_pill_bar, brighten
         from src.ui import font_manager as fm
 
-        slot_w, slot_h = 140, 48
-        gap            = 8
+        slot_w, slot_h = 180, 50
+        gap            = 10
         start_x        = SCREEN_W - (slot_w * len(self.loadout) + gap * (len(self.loadout) - 1)) - 20
         y              = SCREEN_H - slot_h - 14
 
         font_sm = fm.tiny()
-        font_md = fm.hud()
+        font_md = fm.tiny()  # Use tiny for weapon names to fit
 
         for i, weapon in enumerate(self.loadout):
             x       = start_x + i * (slot_w + gap)
@@ -516,21 +513,29 @@ class Player:
                                  border_radius=8)
                 surf.blit(glow_surf, (x - 4, y - 4))
 
-            # Weapon name
+            # Key hint — top-left corner, small
+            key_text = "Q" if i == 0 else str(i + 1)
+            hint = font_sm.render(f"[{key_text}]", True, (70, 80, 100))
+            surf.blit(hint, (x + 6, y + 4))
+
+            # Weapon name — right of key hint, truncated to fit
             name_color = weapon.color if active else C_GRAY
-            name_lbl = font_md.render(weapon.name[:14], True, name_color)
-            surf.blit(name_lbl, (x + 8, y + 4))
+            # Measure available space for name (slot width minus padding and hint)
+            name_x = x + hint.get_width() + 10
+            max_name_w = slot_w - hint.get_width() - 18
+            # Truncate name to fit
+            display_name = weapon.name
+            name_surf = font_md.render(display_name, True, name_color)
+            while name_surf.get_width() > max_name_w and len(display_name) > 3:
+                display_name = display_name[:-1]
+                name_surf = font_md.render(display_name + "..", True, name_color)
+            surf.blit(name_surf, (name_x, y + 4))
 
             # Cooldown bar inside slot
             cd = 1.0 - weapon.cooldown_ratio
-            bar_y = y + slot_h - 10
+            bar_y = y + slot_h - 12
             bar_w = slot_w - 16
             cd_fg = weapon.color if active else (80, 90, 100)
             draw_pill_bar(surf, x + 8, bar_y, bar_w, 5,
                           cd, cd_fg, bg_color=(25, 30, 40),
                           border_color=(40, 45, 55))
-
-            # Key hint
-            key_text = "Q" if i == 0 else "2"
-            hint = font_sm.render(f"[{key_text}]", True, (70, 80, 100))
-            surf.blit(hint, (x + slot_w - hint.get_width() - 6, y + 5))
