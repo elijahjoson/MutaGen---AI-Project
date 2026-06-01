@@ -39,7 +39,7 @@ class Enemy:
         # --- NEW: VISUAL ASSET LOADING ---
         if is_boss and boss_img_path:
             raw_img = pygame.image.load(boss_img_path).convert_alpha()
-            size = int(self.radius * 6) # Boss is 3x bigger than a normal slime
+            size = int(self.radius * 5) # Boss is 3x bigger than a normal slime
         else:
             arch_name = chrom.archetype.name.lower()
             if arch_name == "tank":

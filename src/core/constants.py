@@ -54,13 +54,13 @@ C_DANGER       = (255,  55,  55)
 C_HUD_PANEL    = (8,   12,  24, 200)
 
 # ── Player config  ────────────────────────────────────────────────────
-PLAYER_HP              = 150
+PLAYER_HP              = 250
 PLAYER_SPEED           = 5          # game units → * SPEED_SCALE px/s
 PLAYER_RADIUS          = 27
-PLAYER_HP_REGEN_WAVE   = 20         # HP restored at wave end
-PLAYER_INV_FRAMES      = 0.5        # invincibility seconds after hit
+PLAYER_HP_REGEN_WAVE   = 40         # HP restored at wave end
+PLAYER_INV_FRAMES      = 0.75        # invincibility seconds after hit
 
-PLAYER_MAX_STAMINA     = 100
+PLAYER_MAX_STAMINA     = 150
 PLAYER_STAMINA_REGEN   = 10         # per second
 PLAYER_DASH_COST       = 25         # stamina per dash
 PLAYER_DASH_SPEED_MULT = 2.0
@@ -70,7 +70,7 @@ PLAYER_MAX_LOADOUT     = 2          # weapons equipped at once
 # ── Weapon configs ───────────────────────────────────────────────────
 WEAPONS = {
     "Pulse Rifle": {
-        "damage":            75,
+        "damage":            100,
         "range":             1000,    # pixels
         "cooldown":          0.25,    # seconds
         "stamina_cost":      1,
@@ -82,7 +82,7 @@ WEAPONS = {
         "description":       "Fast burst. Low stamina cost.",
     },
     "Shock Blade": {
-        "damage":            60,
+        "damage":            75,
         "range":             150,     # pixels, melee hitbox radius
         "cooldown":          0.2,
         "stamina_cost":      5,
@@ -92,7 +92,7 @@ WEAPONS = {
         "description":       "Heavy melee. Hits everything in range.",
     },
     "Arc Launcher": {
-        "damage":            100,
+        "damage":            125,
         "range":             700,    # pixels
         "cooldown":          0.5,
         "stamina_cost":      10,
@@ -104,7 +104,7 @@ WEAPONS = {
         "description":       "Slow, massive damage. High stamina drain.",
     },
     "Stasis Trap": {
-        "damage":            150,
+        "damage":            175,
         "range":             500,    # max placement distance from player
         "cooldown":          1.5,
         "stamina_cost":      15,
@@ -172,7 +172,7 @@ GA_MAX_MUTATION_RATE  = 0.30
 GA_W1                 = 0.6   # weight: survival time
 GA_W2                 = 0.4   # weight: damage dealt
 GA_BASE_SIGMA                    = 0.15
-LEDGER_STABLE_THRESHOLD_PCT      = 5.0
+LEDGER_STABLE_THRESHOLD_PCT      = 8.0
 LEDGER_MAX_ENTRIES_PER_ARCHETYPE = 3
 
 # ── SA settings  ────────────────────────────────────────────────────

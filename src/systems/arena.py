@@ -10,7 +10,7 @@ from src.data.lethality_log import LethalityLog, EnemyRecord
 from src.core.constants import ARENA_W, ARENA_H, MIN_SPAWN_DISTANCE
 
 SPAWN_BATCH_SIZE = 5
-SPAWN_INTERVAL   = 8.0
+SPAWN_INTERVAL   = 5.0
 
 class Arena:
     def __init__(self, player: Player, lethality_log: LethalityLog):
