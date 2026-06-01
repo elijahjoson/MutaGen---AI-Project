@@ -164,20 +164,6 @@ class SwingHitbox:
         )
         surf.blit(s, (int(sx) - int(self.radius) - 2, int(sy) - int(self.radius) - 2))
         pygame.draw.circle(surf, C_SWING, (int(sx), int(sy)), int(self.radius), 2)
-        #alpha  = int(180 * (1.0 - self.progress))
-        # Draw a semi-transparent arc / circle
-        #s = pygame.Surface((int(self.radius)*2+4, int(self.radius)*2+4),
-        #                   pygame.SRCALPHA)
-        #pygame.draw.circle(
-         #   s, (*C_SWING[:3], alpha),
-        #    (int(self.radius)+2, int(self.radius)+2),
-        #    int(self.radius)
-        #)
-        #surf.blit(s, (int(sx) - int(self.radius) - 2,
-        #              int(sy) - int(self.radius) - 2))
-        # Outline
-        #pygame.draw.circle(surf, C_SWING,
-        #                   (int(sx), int(sy)), int(self.radius), 2)
         pygame.draw.circle(surf, (255, 0, 0), (int(sx), int(sy)), int(self.radius), 1)
 
 # ── Trap ──────────────────────────────────────────────────────────────────────

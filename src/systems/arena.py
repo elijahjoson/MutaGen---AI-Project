@@ -2,6 +2,7 @@
 import random
 import math
 import pygame
+from typing import Optional
 from src.entities.player import Player
 from src.systems.enemy import Enemy
 from src.ai.chromosome import Chromosome
@@ -65,7 +66,12 @@ class Arena:
         self.enemies.clear()
         self.enemy_bullets.clear()
         self.lethality.clear()
-        self.spawn_queue = list(chromosomes)
+        mixed_queue = list(chromosomes) 
+        # 2. Shuffle it randomly like a deck of cards
+        random.shuffle(mixed_queue)
+        # 3. Assign the shuffled list to the queue!
+        self.spawn_queue = mixed_queue
+        
         self.spawn_timer = 0.0
         self.wave_complete = False
 

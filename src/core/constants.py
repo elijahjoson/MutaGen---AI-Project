@@ -70,32 +70,32 @@ PLAYER_MAX_LOADOUT     = 2          # weapons equipped at once
 # ── Weapon configs ───────────────────────────────────────────────────
 WEAPONS = {
     "Pulse Rifle": {
-        "damage":            25,
-        "range":             700,    # pixels
-        "cooldown":          0.5,    # seconds
-        "stamina_cost":      0,
+        "damage":            75,
+        "range":             1000,    # pixels
+        "cooldown":          0.25,    # seconds
+        "stamina_cost":      1,
         "projectile_speed":  15,     # game units → * SPEED_SCALE px/s
-        "projectile_lifespan": 3,  # seconds (backup cap)
+        "projectile_lifespan": 5,  # seconds (backup cap)
         "type":              "ranged",
         "proj_radius":       6,
         "color":             (255, 240, 80),
-        "description":       "Fast burst. No stamina cost.",
+        "description":       "Fast burst. Low stamina cost.",
     },
     "Shock Blade": {
-        "damage":            50,
-        "range":             100,     # pixels, melee hitbox radius
-        "cooldown":          1.0,
-        "stamina_cost":      10,
+        "damage":            60,
+        "range":             150,     # pixels, melee hitbox radius
+        "cooldown":          0.2,
+        "stamina_cost":      5,
         "type":              "melee",
         "swing_duration":    0.18,   # how long the hitbox stays active
         "color":             (200, 230, 255),
         "description":       "Heavy melee. Hits everything in range.",
     },
     "Arc Launcher": {
-        "damage":            80,
-        "range":             500,    # pixels
-        "cooldown":          2.0,
-        "stamina_cost":      20,
+        "damage":            100,
+        "range":             700,    # pixels
+        "cooldown":          0.5,
+        "stamina_cost":      10,
         "projectile_speed":  10,     # game units → * SPEED_SCALE px/s
         "projectile_lifespan": 4,
         "type":              "ranged",
@@ -104,9 +104,9 @@ WEAPONS = {
         "description":       "Slow, massive damage. High stamina drain.",
     },
     "Stasis Trap": {
-        "damage":            100,
-        "range":             300,    # max placement distance from player
-        "cooldown":          3.0,
+        "damage":            150,
+        "range":             500,    # max placement distance from player
+        "cooldown":          1.5,
         "stamina_cost":      15,
         "type":              "utility",
         "trap_radius":       75,     # trigger radius on ground
@@ -126,7 +126,7 @@ ARCHETYPES = {
         "color": C_TANK,
     },
     "Striker": {
-        "hp": 80,  "speed": 6, "damage": 15,
+        "hp": 80,  "speed": 5, "damage": 15,
         "attack_cd": 1.5, "resistance": 0.1,
         "radius": 20, "attack_range": 40,
         "color": C_STRIKER,

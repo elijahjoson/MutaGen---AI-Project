@@ -44,7 +44,7 @@ from src.ui.ui_helpers import (
 )
 
 # ── Sentience threshold ───────────────────────────────────────────────────────
-SENTIENCE_THRESHOLD = 0.85
+SENTIENCE_THRESHOLD = 5
 
 
 class State(Enum):
@@ -158,8 +158,8 @@ class GameController:
         self.wave_n += 1
         self.lethality_log.clear()
 
-        # --- BOSS EVERY 10 WAVES ---
-        if self.wave_n % 10 == 0:
+        # --- BOSS EVERY 5 WAVES ---
+        if self.wave_n % 5 == 0:
             from collections import Counter
             current_pop = self.registry.current()
             

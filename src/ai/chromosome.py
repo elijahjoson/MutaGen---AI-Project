@@ -65,13 +65,13 @@ class Chromosome:
 
 # Wave-1 baselines (NERFED FOR PLAYTESTING)
 # Tank: Slower (1.5), hits less often (every 2.0s), less damage (10)
-TANK_BASELINE    = Chromosome(Archetype.TANK,    hp=300, speed=1.5, damage=10, attack_cd=2.0, resistance=0.4)
+TANK_BASELINE    = Chromosome(Archetype.TANK,    hp=300, speed=2, damage=10, attack_cd=1.0, resistance=0.4)
 
 # Striker: Much slower (2.8 down from 5.0), hits less often (every 1.5s down from 0.5s)
-STRIKER_BASELINE = Chromosome(Archetype.STRIKER, hp=100, speed=2.8, damage=15, attack_cd=1.5, resistance=0.1)
+STRIKER_BASELINE = Chromosome(Archetype.STRIKER, hp=80, speed=5, damage=15, attack_cd=1.5, resistance=0.1)
 
 # Ranged: Slower to allow dodging
-RANGED_BASELINE  = Chromosome(Archetype.RANGED,  hp=150, speed=1.8, damage=15, attack_cd=2.0, resistance=0.1)
+RANGED_BASELINE  = Chromosome(Archetype.RANGED,  hp=100, speed=3, damage=20, attack_cd=0.8, resistance=0.1)
 
 # Support: Stays back
-SUPPORT_BASELINE = Chromosome(Archetype.SUPPORT, hp=200, speed=1.5, damage=5,  attack_cd=2.0, resistance=0.2)
+SUPPORT_BASELINE = Chromosome(Archetype.SUPPORT, hp=120, speed=3, damage=5,  attack_cd=0.5, resistance=0.2)

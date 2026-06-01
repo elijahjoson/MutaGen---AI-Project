@@ -31,6 +31,7 @@ class Enemy:
             self.max_hp = float(chrom.hp) * 10.0
             self.chrom.damage *= 2.5              # Boss hits 2.5x harder
             self.chrom.speed *= 0.8               # Boss moves slightly slower (optional)
+            self.radius *= 5.0
         else:
             self.hp = float(chrom.hp)
             self.max_hp = float(chrom.hp)
