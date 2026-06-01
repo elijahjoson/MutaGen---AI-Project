@@ -56,13 +56,6 @@ class Chromosome:
         # Constructor positional order matches GENES tuple order exactly
         return cls(archetype, *gene_values)
 
-
-# Wave-1 baselines — used by controller.py to seed the genotype registry.
-#TANK_BASELINE    = Chromosome(Archetype.TANK,    hp=300, speed=2.0, damage=10, attack_cd=1.0, resistance=0.4)
-#STRIKER_BASELINE = Chromosome(Archetype.STRIKER, hp=100, speed=5.0, damage=20, attack_cd=0.5, resistance=0.1)
-#RANGED_BASELINE  = Chromosome(Archetype.RANGED,  hp=150, speed=3.0, damage=25, attack_cd=1.2, resistance=0.1)
-#SUPPORT_BASELINE = Chromosome(Archetype.SUPPORT, hp=200, speed=2.5, damage=5,  attack_cd=2.0, resistance=0.2)
-
 # Wave-1 baselines (NERFED FOR PLAYTESTING)
 # Tank: Slower (1.5), hits less often (every 2.0s), less damage (10)
 TANK_BASELINE    = Chromosome(Archetype.TANK,    hp=300, speed=2, damage=10, attack_cd=1.0, resistance=0.4)

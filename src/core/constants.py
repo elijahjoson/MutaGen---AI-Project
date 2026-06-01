@@ -54,10 +54,10 @@ C_DANGER       = (255,  55,  55)
 C_HUD_PANEL    = (8,   12,  24, 200)
 
 # ── Player config  ────────────────────────────────────────────────────
-PLAYER_HP              = 250
+PLAYER_HP              = 350
 PLAYER_SPEED           = 5          # game units → * SPEED_SCALE px/s
 PLAYER_RADIUS          = 27
-PLAYER_HP_REGEN_WAVE   = 40         # HP restored at wave end
+PLAYER_HP_REGEN_WAVE   = 50         # HP restored at wave end
 PLAYER_INV_FRAMES      = 0.75        # invincibility seconds after hit
 
 PLAYER_MAX_STAMINA     = 150
@@ -122,9 +122,9 @@ ARCHETYPES = {
     "Tank": {
         "hp": 300, "speed": 2, "damage": 10,
         "attack_cd": 1.0, "resistance": 0.4,
-        "radius": 50, "attack_range": 60,
+        "radius": 50, "attack_range": 80,
         "color": C_TANK,
-    },
+    },  
     "Striker": {
         "hp": 80,  "speed": 5, "damage": 15,
         "attack_cd": 1.5, "resistance": 0.1,
